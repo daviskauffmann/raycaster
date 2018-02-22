@@ -18,6 +18,7 @@ int main(int argc, char *args[])
 {
     // SDL
     SDL_Init(SDL_INIT_VIDEO);
+    SDL_SetRelativeMouseMode(SDL_TRUE);
     SDL_Window *window = SDL_CreateWindow(
         TITLE,
         SDL_WINDOWPOS_UNDEFINED,
@@ -76,9 +77,11 @@ int main(int argc, char *args[])
     // player
     double player_x = 8.0;
     double player_y = 8.0;
-    double player_move_speed = 5.0;
     double player_a = 0.0;
-    double player_turn_speed = 2.5;
+    double player_walk_speed = 5.0;
+    double player_sprint_speed = 10.0;
+    double player_move_speed = player_walk_speed;
+    double player_turn_speed = 3;
 
     // timing
     unsigned int old_time = SDL_GetTicks();
@@ -90,8 +93,7 @@ int main(int argc, char *args[])
     bool a_down = false;
     bool s_down = false;
     bool d_down = false;
-    bool q_down = false;
-    bool e_down = false;
+    bool lshift_down = false;
 
     // rendering
     unsigned int *pixels = malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(unsigned int));
@@ -110,6 +112,13 @@ int main(int argc, char *args[])
         {
             switch (event.type)
             {
+            case SDL_MOUSEMOTION:
+            {
+                int x = event.motion.xrel;
+
+                player_a += (double)x / 1000.0 * player_turn_speed;
+            }
+            break;
             case SDL_KEYDOWN:
             {
                 SDL_Keycode key = event.key.keysym.sym;
@@ -136,14 +145,9 @@ int main(int argc, char *args[])
                     d_down = true;
                 }
                 break;
-                case SDLK_q:
+                case SDLK_LSHIFT:
                 {
-                    q_down = true;
-                }
-                break;
-                case SDLK_e:
-                {
-                    e_down = true;
+                    lshift_down = true;
                 }
                 break;
                 }
@@ -175,14 +179,9 @@ int main(int argc, char *args[])
                     d_down = false;
                 }
                 break;
-                case SDLK_q:
+                case SDLK_LSHIFT:
                 {
-                    q_down = false;
-                }
-                break;
-                case SDLK_e:
-                {
-                    e_down = false;
+                    lshift_down = false;
                 }
                 break;
                 }
@@ -199,60 +198,75 @@ int main(int argc, char *args[])
         // apply input to player
         if (w_down)
         {
-            player_x += sin(player_a) * player_move_speed * delta_time;
-            player_y += cos(player_a) * player_move_speed * delta_time;
+            double dx = sin(player_a) * player_move_speed * delta_time;
+            double dy = cos(player_a) * player_move_speed * delta_time;
 
-            if (map[(int)player_x][(int)player_y] == 1)
+            if (map[(int)(player_x + dx)][(int)player_y] == 0)
             {
-                player_x -= sin(player_a) * player_move_speed * delta_time;
-                player_y -= cos(player_a) * player_move_speed * delta_time;
+                player_x += dx;
+            }
+
+            if (map[(int)player_x][(int)(player_y + dy)] == 0)
+            {
+                player_y += dy;
             }
         }
 
         if (a_down)
         {
-            player_a -= player_turn_speed * delta_time;
+            double dx = cos(-player_a) * player_move_speed * delta_time;
+            double dy = sin(-player_a) * player_move_speed * delta_time;
+
+            if (map[(int)(player_x - dx)][(int)player_y] == 0)
+            {
+                player_x -= dx;
+            }
+
+            if (map[(int)player_x][(int)(player_y - dy)] == 0)
+            {
+                player_y -= dy;
+            }
         }
 
         if (s_down)
         {
-            player_x -= sin(player_a) * player_move_speed * delta_time;
-            player_y -= cos(player_a) * player_move_speed * delta_time;
+            double dx = sin(player_a) * player_move_speed * delta_time;
+            double dy = cos(player_a) * player_move_speed * delta_time;
 
-            if (map[(int)player_x][(int)player_y] == 1)
+            if (map[(int)(player_x - dx)][(int)player_y] == 0)
             {
-                player_x += sin(player_a) * player_move_speed * delta_time;
-                player_y += cos(player_a) * player_move_speed * delta_time;
+                player_x -= dx;
+            }
+
+            if (map[(int)player_x][(int)(player_y - dy)] == 0)
+            {
+                player_y -= dy;
             }
         }
 
         if (d_down)
         {
-            player_a += player_turn_speed * delta_time;
-        }
+            double dx = cos(-player_a) * player_move_speed * delta_time;
+            double dy = sin(-player_a) * player_move_speed * delta_time;
 
-        if (q_down)
-        {
-            player_x -= cos(-player_a) * player_move_speed * delta_time;
-            player_y -= sin(-player_a) * player_move_speed * delta_time;
-
-            if (map[(int)player_x][(int)player_y] == 1)
+            if (map[(int)(player_x + dx)][(int)player_y] == 0)
             {
-                player_x += cos(-player_a) * player_move_speed * delta_time;
-                player_y += sin(-player_a) * player_move_speed * delta_time;
+                player_x += dx;
+            }
+
+            if (map[(int)player_x][(int)(player_y + dy)] == 0)
+            {
+                player_y += dy;
             }
         }
 
-        if (e_down)
+        if (lshift_down)
         {
-            player_x += cos(-player_a) * player_move_speed * delta_time;
-            player_y += sin(-player_a) * player_move_speed * delta_time;
-
-            if (map[(int)player_x][(int)player_y] == 1)
-            {
-                player_x -= cos(-player_a) * player_move_speed * delta_time;
-                player_y -= sin(-player_a) * player_move_speed * delta_time;
-            }
+            player_move_speed = player_sprint_speed;
+        }
+        else
+        {
+            player_move_speed = player_walk_speed;
         }
 
         // calculate pixels
