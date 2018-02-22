@@ -7,8 +7,8 @@
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
 
-#define MAP_WIDTH 50
-#define MAP_HEIGHT 50
+#define MAP_WIDTH 32
+#define MAP_HEIGHT 32
 
 #define FOV 90
 #define DEPTH 64.0
@@ -51,7 +51,22 @@ int main(int argc, char *args[])
                 map[x][y] = 0;
             }
 
-            if (x == 5 && y < 5)
+            if (x == 5 && y < 10)
+            {
+                map[x][y] = 1;
+            }
+
+            if (y == 15 && x < 15)
+            {
+                map[x][y] = 1;
+            }
+
+            if (x == 20 && y < 10)
+            {
+                map[x][y] = 1;
+            }
+
+            if (x == 25 && y == 25)
             {
                 map[x][y] = 1;
             }
@@ -253,7 +268,7 @@ int main(int argc, char *args[])
             double ray_y = cos(ray_angle);
 
             // cast the ray
-            double ray_length = 0.0f;
+            double ray_length = 0.0;
             bool hit = false;
             bool boundary = false;
             while (!hit && ray_length < DEPTH)
@@ -277,23 +292,6 @@ int main(int argc, char *args[])
                     if (map[x][y] == 1)
                     {
                         hit = true;
-
-                        // double distances[2][2];
-                        // double dots[2][2];
-
-                        // for (int tx = 0; tx < 2; tx++)
-                        // {
-                        //     for (int ty = 0; ty < 2; ty++)
-                        //     {
-                        //         double vx = (double)x + (double)tx - player_x;
-                        //         double vy = (double)y + (double)ty - player_y;
-                        //         double distance = sqrt(pow(vx, 2) + pow(vy, 2));
-                        //         double dot = (ray_x * vx / distance) + (ray_y * vy / distance);
-
-                        //         distances[tx][ty] = distance;
-                        //         dots[tx][ty] = dot;
-                        //     }
-                        // }
                     }
                 }
             }
