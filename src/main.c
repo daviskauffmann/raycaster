@@ -42,8 +42,7 @@ int main(int argc, char *args[])
         SCREEN_HEIGHT);
 
     // textures
-    Uint32 buffer[SCREEN_HEIGHT][SCREEN_WIDTH];
-    int textures[8][TEX_WIDTH * TEX_HEIGHT];
+    unsigned int textures[8][TEX_WIDTH][TEX_HEIGHT];
     for (int x = 0; x < TEX_WIDTH; x++)
     {
         for (int y = 0; y < TEX_HEIGHT; y++)
@@ -52,14 +51,14 @@ int main(int argc, char *args[])
             //int xcolor = x * 256 / texWidth;
             int ycolor = y * 256 / TEX_HEIGHT;
             int xycolor = y * 128 / TEX_HEIGHT + x * 128 / TEX_WIDTH;
-            textures[0][TEX_WIDTH * y + x] = 65536 * 254 * (x != y && x != TEX_WIDTH - y); //flat red texture with black cross
-            textures[1][TEX_WIDTH * y + x] = xycolor + 256 * xycolor + 65536 * xycolor;    //sloped greyscale
-            textures[2][TEX_WIDTH * y + x] = 256 * xycolor + 65536 * xycolor;              //sloped yellow gradient
-            textures[3][TEX_WIDTH * y + x] = xorcolor + 256 * xorcolor + 65536 * xorcolor; //xor greyscale
-            textures[4][TEX_WIDTH * y + x] = 256 * xorcolor;                               //xor green
-            textures[5][TEX_WIDTH * y + x] = 65536 * 192 * (x % 16 && y % 16);             //red bricks
-            textures[6][TEX_WIDTH * y + x] = 65536 * ycolor;                               //red gradient
-            textures[7][TEX_WIDTH * y + x] = 128 + 256 * 128 + 65536 * 128;                //flat grey texture
+            textures[0][x][y] = 65536 * 254 * (x != y && x != TEX_WIDTH - y); //flat red texture with black cross
+            textures[1][x][y] = xycolor + 256 * xycolor + 65536 * xycolor;    //sloped greyscale
+            textures[2][x][y] = 256 * xycolor + 65536 * xycolor;              //sloped yellow gradient
+            textures[3][x][y] = xorcolor + 256 * xorcolor + 65536 * xorcolor; //xor greyscale
+            textures[4][x][y] = 256 * xorcolor;                               //xor green
+            textures[5][x][y] = 65536 * 192 * (x % 16 && y % 16);             //red bricks
+            textures[6][x][y] = 65536 * ycolor;                               //red gradient
+            textures[7][x][y] = 128 + 256 * 128 + 65536 * 128;                //flat grey texture
         }
     }
 
@@ -118,6 +117,15 @@ int main(int argc, char *args[])
     bool quit = false;
     while (!quit)
     {
+        // clear screen
+        // for (int x = 0; x < SCREEN_WIDTH; x++)
+        // {
+        //     for (int y = 0; y < SCREEN_HEIGHT; y++)
+        //     {
+        //         pixels[y * SCREEN_WIDTH + x] = 0;
+        //     }
+        // }
+
         // calculate delta time
         old_time = current_time;
         current_time = SDL_GetTicks();
@@ -217,6 +225,20 @@ int main(int argc, char *args[])
         }
 
         // apply input to player
+        if (lshift_down)
+        {
+            player_move_speed = player_sprint_speed;
+        }
+        else
+        {
+            player_move_speed = player_walk_speed;
+        }
+
+        if ((w_down && d_down) || (w_down && a_down) || (s_down && d_down) || (s_down && a_down))
+        {
+            player_move_speed /= sqrt(2);
+        }
+
         if (w_down)
         {
             double dx = sin(player_a) * player_move_speed * delta_time;
@@ -281,15 +303,6 @@ int main(int argc, char *args[])
             }
         }
 
-        if (lshift_down)
-        {
-            player_move_speed = player_sprint_speed;
-        }
-        else
-        {
-            player_move_speed = player_walk_speed;
-        }
-
         // calculate pixels
         double fov = FOV * M_PI / 180.0;
         for (int x = 0; x < SCREEN_WIDTH; x++)
@@ -302,8 +315,15 @@ int main(int argc, char *args[])
             double ray_x = sin(ray_angle);
             double ray_y = cos(ray_angle);
 
-            // cast the ray
+            // texture sample coordinates
+            double sample_x = 0.0;
+
+            // store the length of the ray, as well as the x and y coordinates of the map where the ray is
             double ray_length = 0.0;
+            int map_x;
+            int map_y;
+
+            // cast the ray
             bool hit = false;
             bool boundary = false;
             while (!hit && ray_length < DEPTH)
@@ -312,11 +332,11 @@ int main(int argc, char *args[])
                 ray_length += RESOLUTION;
 
                 // get map coordinate from current ray position
-                int x = (int)(player_x + ray_x * ray_length);
-                int y = (int)(player_y + ray_y * ray_length);
+                map_x = (int)(player_x + ray_x * ray_length);
+                map_y = (int)(player_y + ray_y * ray_length);
 
                 // test if ray is out of bounds
-                if (x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT)
+                if (map_x < 0 || map_x >= MAP_WIDTH || map_y < 0 || map_y >= MAP_HEIGHT)
                 {
                     hit = true;
                     ray_length = DEPTH;
@@ -324,9 +344,38 @@ int main(int argc, char *args[])
                 else
                 {
                     // test if there is a wall
-                    if (map[x][y] > 0)
+                    if (map[map_x][map_y] > 0)
                     {
                         hit = true;
+
+                        // determine tile midpoint
+                        double mid_x = (double)map_x + 0.5;
+                        double mid_y = (double)map_y + 0.5;
+
+                        // determine the collision point
+                        double point_x = player_x + ray_x * ray_length;
+                        double point_y = player_y + ray_y * ray_length;
+
+                        // calculate angle between the two points
+                        double angle = atan2(point_y - mid_y, point_x - mid_x);
+
+                        // calculate sample point
+                        if (angle >= -M_PI * 0.25 && angle < M_PI * 0.25)
+                        {
+                            sample_x = point_y - (double)map_y;
+                        }
+                        if (angle >= M_PI * 0.25 && angle < M_PI * 0.75)
+                        {
+                            sample_x = point_x - (double)map_x;
+                        }
+                        if (angle < -M_PI * 0.25 && angle >= -M_PI * 0.75)
+                        {
+                            sample_x = point_x - (double)map_x;
+                        }
+                        if (angle >= M_PI * 0.75 || angle < -M_PI * 0.75)
+                        {
+                            sample_x = point_y - (double)map_y;
+                        }
                     }
                 }
             }
@@ -354,21 +403,21 @@ int main(int argc, char *args[])
                 {
                     // determine wall color
                     unsigned int wall_color = 0x00000000;
-                    if (ray_length <= DEPTH / 4.0)
+
+                    // find the sample y
+                    double sample_y = ((double)y - (double)ceiling_y) / ((double)floor_y - (double)ceiling_y);
+
+                    // determine which texture based on map coordinates
+                    int tex_num = map[map_x][map_y] - 1;
+
+                    // get the pixel from the texture based on the sample coordinates
+                    int tex_x = (int)(sample_y * TEX_HEIGHT);
+                    int tex_y = (int)(sample_x * TEX_WIDTH);
+
+                    // set the color to that
+                    if (tex_x < TEX_WIDTH && tex_y < TEX_HEIGHT)
                     {
-                        wall_color = 0xffffffff;
-                    }
-                    else if (ray_length < DEPTH / 3.0)
-                    {
-                        wall_color = 0xffeeeeee;
-                    }
-                    else if (ray_length < DEPTH / 2.0)
-                    {
-                        wall_color = 0xffdddddd;
-                    }
-                    else
-                    {
-                        wall_color = 0xffcccccc;
+                        wall_color = textures[tex_num][tex_x][tex_y];
                     }
 
                     // draw the color
@@ -378,24 +427,7 @@ int main(int argc, char *args[])
                 else
                 {
                     // determine floor color
-                    unsigned int floor_color = 0x00000000;
-                    double b = 1.0 - ((double)y - (double)SCREEN_HEIGHT / 2.0) / ((double)SCREEN_HEIGHT / 2.0);
-                    if (b < 0.25)
-                    {
-                        floor_color = 0xff00ff00;
-                    }
-                    else if (b < 0.5)
-                    {
-                        floor_color = 0xff00ee00;
-                    }
-                    else if (b < 0.75)
-                    {
-                        floor_color = 0xff00dd00;
-                    }
-                    else
-                    {
-                        floor_color = 0xff00cc00;
-                    }
+                    unsigned int floor_color = 0xff00ff00;
 
                     // draw the color
                     pixels[y * SCREEN_WIDTH + x] = floor_color;
