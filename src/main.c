@@ -1,6 +1,7 @@
 #include <math.h>
 #include <SDL2\SDL.h>
 #include <SDL2\SDL_image.h>
+#include <SDL2\SDL_ttf.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -129,6 +130,9 @@ int main(int argc, char *args[])
     // SDL Image
     IMG_Init(IMG_INIT_PNG);
 
+    // SDL TTF
+    TTF_Font *font = TTF_OpenFont("VeraMono.ttf", 24);
+
     // textures
     SDL_Surface *textures[8];
     textures[0] = IMG_Load("bluestone.png");
@@ -197,6 +201,7 @@ int main(int argc, char *args[])
 
     // rendering
     unsigned int *pixels = malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(unsigned int));
+    double *depth_buffer = malloc(SCREEN_WIDTH * sizeof(double));
 
     bool quit = false;
     while (!quit)
@@ -465,6 +470,8 @@ int main(int argc, char *args[])
                 perp_wall_dist = (map_y - pos_y + (1 - step_y) / 2) / ray_dir_y;
             }
 
+            depth_buffer[x] = perp_wall_dist;
+
             //Calculate height of line to draw on screen
             int line_height = (int)((double)SCREEN_HEIGHT / perp_wall_dist);
 
@@ -592,8 +599,10 @@ int main(int argc, char *args[])
         {
             pillar_angle -= M_PI * 2.0;
         }
+
         double fov = (FOV * M_PI / 180.0);
         bool pillar_in_fov = fabs(pillar_angle) < fov / 2.0;
+
         double pillar_dist = sqrt(pow(pillar_dir_x, 2) + pow(pillar_dir_y, 2));
 
         if (pillar_in_fov && pillar_dist >= 1.0 && pillar_dist < 16.0)
@@ -616,7 +625,10 @@ int main(int argc, char *args[])
                     int screen_y = pillar_ceiling + y;
                     if (screen_x >= 0 && screen_x < SCREEN_WIDTH && screen_y >= 0 && screen_y < SCREEN_HEIGHT)
                     {
-                        pixels[screen_y * SCREEN_WIDTH + screen_x] = tex_pixel;
+                        if (tex_pixel > 0 && depth_buffer[screen_x] >= pillar_dist)
+                        {
+                            pixels[screen_y * SCREEN_WIDTH + screen_x] = tex_pixel;
+                        }
                     }
                 }
             }
@@ -633,6 +645,7 @@ int main(int argc, char *args[])
         SDL_RenderPresent(renderer);
     }
 
+    free(depth_buffer);
     free(pixels);
 
     for (int i = 0; i < 8; i++)
