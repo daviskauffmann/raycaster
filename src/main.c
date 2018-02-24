@@ -1,5 +1,6 @@
 #include <math.h>
 #include <SDL.h>
+#include <SDL_image.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -8,15 +9,99 @@
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
 
-#define TEX_WIDTH 64
-#define TEX_HEIGHT 64
-
 #define MAP_WIDTH 24
 #define MAP_HEIGHT 24
 
-#define FOV 90
-#define DEPTH 64.0
-#define RESOLUTION 0.01
+#define MOVE_SPEED 5.0
+#define SPRINT_MULT 2.0
+#define ROTATE_SPEED 3.14
+
+#define FOV 66
+
+unsigned int get_pixel(SDL_Surface *surface, int x, int y)
+{
+    int bpp = surface->format->BytesPerPixel;
+    // Here p is the address to the pixel we want to retrieve
+    unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
+
+    switch (bpp)
+    {
+    case 1:
+    {
+        return *p;
+    }
+    break;
+    case 2:
+    {
+        return *(unsigned short *)p;
+    }
+    break;
+    case 3:
+    {
+        if (SDL_BYTEORDER == SDL_BIG_ENDIAN)
+        {
+            return p[0] << 16 | p[1] << 8 | p[2];
+        }
+        else
+        {
+            return p[0] | p[1] << 8 | p[2] << 16;
+        }
+    }
+    break;
+    case 4:
+    {
+        return *(unsigned int *)p;
+    }
+    break;
+    default:
+    {
+        return 0; // shouldn't happen, but avoids warnings
+    }
+    break;
+    }
+}
+
+void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
+{
+    int bpp = surface->format->BytesPerPixel;
+    /* Here p is the address to the pixel we want to set */
+    unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
+
+    switch (bpp)
+    {
+    case 1:
+    {
+        *p = pixel;
+    }
+    break;
+    case 2:
+    {
+        *(unsigned short *)p = pixel;
+    }
+    break;
+    case 3:
+    {
+        if (SDL_BYTEORDER == SDL_BIG_ENDIAN)
+        {
+            p[0] = (pixel >> 16) & 0xff;
+            p[1] = (pixel >> 8) & 0xff;
+            p[2] = pixel & 0xff;
+        }
+        else
+        {
+            p[0] = pixel & 0xff;
+            p[1] = (pixel >> 8) & 0xff;
+            p[2] = (pixel >> 16) & 0xff;
+        }
+    }
+    break;
+    case 4:
+    {
+        *(unsigned int *)p = pixel;
+    }
+    break;
+    }
+}
 
 int main(int argc, char *args[])
 {
@@ -41,26 +126,19 @@ int main(int argc, char *args[])
         SCREEN_WIDTH,
         SCREEN_HEIGHT);
 
+    // SDL Image
+    IMG_Init(IMG_INIT_PNG);
+
     // textures
-    unsigned int textures[8][TEX_WIDTH][TEX_HEIGHT];
-    for (int x = 0; x < TEX_WIDTH; x++)
-    {
-        for (int y = 0; y < TEX_HEIGHT; y++)
-        {
-            int xorcolor = (x * 256 / TEX_WIDTH) ^ (y * 256 / TEX_HEIGHT);
-            //int xcolor = x * 256 / texWidth;
-            int ycolor = y * 256 / TEX_HEIGHT;
-            int xycolor = y * 128 / TEX_HEIGHT + x * 128 / TEX_WIDTH;
-            textures[0][x][y] = 65536 * 254 * (x != y && x != TEX_WIDTH - y); //flat red texture with black cross
-            textures[1][x][y] = xycolor + 256 * xycolor + 65536 * xycolor;    //sloped greyscale
-            textures[2][x][y] = 256 * xycolor + 65536 * xycolor;              //sloped yellow gradient
-            textures[3][x][y] = xorcolor + 256 * xorcolor + 65536 * xorcolor; //xor greyscale
-            textures[4][x][y] = 256 * xorcolor;                               //xor green
-            textures[5][x][y] = 65536 * 192 * (x % 16 && y % 16);             //red bricks
-            textures[6][x][y] = 65536 * ycolor;                               //red gradient
-            textures[7][x][y] = 128 + 256 * 128 + 65536 * 128;                //flat grey texture
-        }
-    }
+    SDL_Surface *textures[8];
+    textures[0] = IMG_Load("bluestone.png");
+    textures[1] = IMG_Load("colorstone.png");
+    textures[2] = IMG_Load("eagle.png");
+    textures[3] = IMG_Load("greystone.png");
+    textures[4] = IMG_Load("mossy.png");
+    textures[5] = IMG_Load("purplestone.png");
+    textures[6] = IMG_Load("redbrick.png");
+    textures[7] = IMG_Load("wood.png");
 
     // map
     char map[MAP_WIDTH][MAP_HEIGHT] =
@@ -91,13 +169,12 @@ int main(int argc, char *args[])
             {4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}};
 
     // player
-    double player_x = 22.0;
-    double player_y = 11.5;
-    double player_a = -(M_PI / 2);
-    double player_walk_speed = 5.0;
-    double player_sprint_speed = 10.0;
-    double player_move_speed = player_walk_speed;
-    double player_turn_speed = 3;
+    double pos_x = 22.0;
+    double pos_y = 11.5;
+    double dir_x = -1;
+    double dir_y = 0;
+    double plane_x = 0;
+    double plane_y = FOV / 100.0;
 
     // timing
     unsigned int old_time = SDL_GetTicks();
@@ -118,13 +195,13 @@ int main(int argc, char *args[])
     while (!quit)
     {
         // clear screen
-        // for (int x = 0; x < SCREEN_WIDTH; x++)
-        // {
-        //     for (int y = 0; y < SCREEN_HEIGHT; y++)
-        //     {
-        //         pixels[y * SCREEN_WIDTH + x] = 0;
-        //     }
-        // }
+        for (int x = 0; x < SCREEN_WIDTH; x++)
+        {
+            for (int y = 0; y < SCREEN_HEIGHT; y++)
+            {
+                pixels[y * SCREEN_WIDTH + x] = 0;
+            }
+        }
 
         // calculate delta time
         old_time = current_time;
@@ -144,8 +221,16 @@ int main(int argc, char *args[])
             case SDL_MOUSEMOTION:
             {
                 int x = event.motion.xrel;
+                double rotate_speed = -x / 1000.0 * ROTATE_SPEED;
 
-                player_a += (double)x / 1000.0 * player_turn_speed;
+                //both camera direction and camera plane must be rotated
+                double old_dir_x = dir_x;
+                dir_x = dir_x * cos(rotate_speed) - dir_y * sin(rotate_speed);
+                dir_y = old_dir_x * sin(rotate_speed) + dir_y * cos(rotate_speed);
+
+                double old_plane_x = plane_x;
+                plane_x = plane_x * cos(rotate_speed) - plane_y * sin(rotate_speed);
+                plane_y = old_plane_x * sin(rotate_speed) + plane_y * cos(rotate_speed);
             }
             break;
             case SDL_KEYDOWN:
@@ -225,213 +310,258 @@ int main(int argc, char *args[])
         }
 
         // apply input to player
+        double move_speed = MOVE_SPEED * delta_time;     //the constant value is in squares/second
+        double rotate_speed = ROTATE_SPEED * delta_time; //the constant value is in radians/second
+
         if (lshift_down)
         {
-            player_move_speed = player_sprint_speed;
-        }
-        else
-        {
-            player_move_speed = player_walk_speed;
+            move_speed *= SPRINT_MULT;
         }
 
         if ((w_down && d_down) || (w_down && a_down) || (s_down && d_down) || (s_down && a_down))
         {
-            player_move_speed /= sqrt(2);
+            move_speed /= sqrt(2);
         }
 
         if (w_down)
         {
-            double dx = sin(player_a) * player_move_speed * delta_time;
-            double dy = cos(player_a) * player_move_speed * delta_time;
+            double dx = dir_x * move_speed;
+            double dy = dir_y * move_speed;
 
-            if (map[(int)(player_x + dx)][(int)player_y] == 0)
-            {
-                player_x += dx;
-            }
-
-            if (map[(int)player_x][(int)(player_y + dy)] == 0)
-            {
-                player_y += dy;
-            }
+            if (map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
+                pos_x += dx;
+            if (map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
+                pos_y += dy;
         }
 
         if (a_down)
         {
-            double dx = cos(-player_a) * player_move_speed * delta_time;
-            double dy = sin(-player_a) * player_move_speed * delta_time;
+            double dx = -dir_y * move_speed;
+            double dy = dir_x * move_speed;
 
-            if (map[(int)(player_x - dx)][(int)player_y] == 0)
-            {
-                player_x -= dx;
-            }
-
-            if (map[(int)player_x][(int)(player_y - dy)] == 0)
-            {
-                player_y -= dy;
-            }
+            if (map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
+                pos_x += dx;
+            if (map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
+                pos_y += dy;
         }
 
         if (s_down)
         {
-            double dx = sin(player_a) * player_move_speed * delta_time;
-            double dy = cos(player_a) * player_move_speed * delta_time;
+            double dx = -dir_x * move_speed;
+            double dy = -dir_y * move_speed;
 
-            if (map[(int)(player_x - dx)][(int)player_y] == 0)
-            {
-                player_x -= dx;
-            }
-
-            if (map[(int)player_x][(int)(player_y - dy)] == 0)
-            {
-                player_y -= dy;
-            }
+            if (map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
+                pos_x += dx;
+            if (map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
+                pos_y += dy;
         }
 
         if (d_down)
         {
-            double dx = cos(-player_a) * player_move_speed * delta_time;
-            double dy = sin(-player_a) * player_move_speed * delta_time;
+            double dx = dir_y * move_speed;
+            double dy = -dir_x * move_speed;
 
-            if (map[(int)(player_x + dx)][(int)player_y] == 0)
-            {
-                player_x += dx;
-            }
-
-            if (map[(int)player_x][(int)(player_y + dy)] == 0)
-            {
-                player_y += dy;
-            }
+            if (map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
+                pos_x += dx;
+            if (map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
+                pos_y += dy;
         }
 
-        // calculate pixels
-        double fov = FOV * M_PI / 180.0;
+        // raycasting
         for (int x = 0; x < SCREEN_WIDTH; x++)
         {
-            // calculate the ray angle for each column
-            double ray_angle = player_a + atan((2.0 * (double)x / (double)SCREEN_WIDTH - 1.0) * tan(fov / 2.0));
-            // double ray_angle = (player_a - fov / 2.0) + fov * ((double)x / (double)SCREEN_WIDTH);
+            //calculate ray position and direction
+            double camera_x = 2 * x / (double)SCREEN_WIDTH - 1; //x-coordinate in camera space
+            double ray_dir_x = dir_x + plane_x * camera_x;
+            double ray_dir_y = dir_y + plane_y * camera_x;
 
-            // unit vector for ray
-            double ray_x = sin(ray_angle);
-            double ray_y = cos(ray_angle);
+            //which box of the map we're in
+            int map_x = (int)pos_x;
+            int map_y = (int)pos_y;
 
-            // texture sample coordinates
-            double sample_x = 0.0;
+            //length of ray from current position to next x or y-side
+            double side_dist_x;
+            double side_dist_y;
 
-            // store the length of the ray, as well as the x and y coordinates of the map where the ray is
-            double ray_length = 0.0;
-            int map_x;
-            int map_y;
+            //length of ray from one x or y-side to next x or y-side
+            double delta_dist_x = fabs(1 / ray_dir_x);
+            double delta_dist_y = fabs(1 / ray_dir_y);
+            double perp_wall_dist;
 
-            // cast the ray
-            bool hit = false;
-            bool boundary = false;
-            while (!hit && ray_length < DEPTH)
+            //what direction to step in x or y-direction (either +1 or -1)
+            int step_x;
+            int step_y;
+
+            int hit = 0; //was there a wall hit?
+            int side;    //was a NS or a EW wall hit?
+
+            //calculate step and initial sideDist
+            if (ray_dir_x < 0)
             {
-                // move the way forward
-                ray_length += RESOLUTION;
+                step_x = -1;
+                side_dist_x = (pos_x - map_x) * delta_dist_x;
+            }
+            else
+            {
+                step_x = 1;
+                side_dist_x = (map_x + 1.0 - pos_x) * delta_dist_x;
+            }
+            if (ray_dir_y < 0)
+            {
+                step_y = -1;
+                side_dist_y = (pos_y - map_y) * delta_dist_y;
+            }
+            else
+            {
+                step_y = 1;
+                side_dist_y = (map_y + 1.0 - pos_y) * delta_dist_y;
+            }
 
-                // get map coordinate from current ray position
-                map_x = (int)(player_x + ray_x * ray_length);
-                map_y = (int)(player_y + ray_y * ray_length);
-
-                // test if ray is out of bounds
-                if (map_x < 0 || map_x >= MAP_WIDTH || map_y < 0 || map_y >= MAP_HEIGHT)
+            //perform DDA
+            while (hit == 0)
+            {
+                //jump to next map square, OR in x-direction, OR in y-direction
+                if (side_dist_x < side_dist_y)
                 {
-                    hit = true;
-                    ray_length = DEPTH;
+                    side_dist_x += delta_dist_x;
+                    map_x += step_x;
+                    side = 0;
                 }
                 else
                 {
-                    // test if there is a wall
-                    if (map[map_x][map_y] > 0)
-                    {
-                        hit = true;
+                    side_dist_y += delta_dist_y;
+                    map_y += step_y;
+                    side = 1;
+                }
 
-                        // determine tile midpoint
-                        double mid_x = (double)map_x + 0.5;
-                        double mid_y = (double)map_y + 0.5;
-
-                        // determine the collision point
-                        double point_x = player_x + ray_x * ray_length;
-                        double point_y = player_y + ray_y * ray_length;
-
-                        // calculate angle between the two points
-                        double angle = atan2(point_y - mid_y, point_x - mid_x);
-
-                        // calculate sample point
-                        if (angle >= -M_PI * 0.25 && angle < M_PI * 0.25)
-                        {
-                            sample_x = point_y - (double)map_y;
-                        }
-                        if (angle >= M_PI * 0.25 && angle < M_PI * 0.75)
-                        {
-                            sample_x = point_x - (double)map_x;
-                        }
-                        if (angle < -M_PI * 0.25 && angle >= -M_PI * 0.75)
-                        {
-                            sample_x = point_x - (double)map_x;
-                        }
-                        if (angle >= M_PI * 0.75 || angle < -M_PI * 0.75)
-                        {
-                            sample_x = point_y - (double)map_y;
-                        }
-                    }
+                //Check if ray has hit a wall
+                if (map[map_x][map_y] > 0)
+                {
+                    hit = 1;
                 }
             }
 
-            double distance = ((ray_x * sin(player_a)) + (ray_y * cos(player_a))) * ray_length;
-
-            // calculate the y coordinate where the ceiling and floor starts
-            int ceiling_y = ((double)SCREEN_HEIGHT / 2.0) * (1.0 - 1.0 / distance);
-            // int ceiling_y = ((double)SCREEN_HEIGHT / 2.0) - ((double)SCREEN_HEIGHT / ray_length);
-            int floor_y = SCREEN_HEIGHT - ceiling_y;
-
-            for (int y = 0; y < SCREEN_HEIGHT; y++)
+            //Calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
+            if (side == 0)
             {
-                // check if this is a ceiling
-                if (y < ceiling_y)
+                perp_wall_dist = (map_x - pos_x + (1 - step_x) / 2) / ray_dir_x;
+            }
+            else
+            {
+                perp_wall_dist = (map_y - pos_y + (1 - step_y) / 2) / ray_dir_y;
+            }
+
+            //Calculate height of line to draw on screen
+            int line_height = (int)((double)SCREEN_HEIGHT / perp_wall_dist);
+
+            //calculate lowest and highest pixel to fill in current stripe
+            int draw_start = -line_height / 2 + SCREEN_HEIGHT / 2;
+            if (draw_start < 0)
+            {
+                draw_start = 0;
+            }
+            int draw_end = line_height / 2 + SCREEN_HEIGHT / 2;
+            if (draw_end >= SCREEN_HEIGHT)
+            {
+                draw_end = SCREEN_HEIGHT - 1;
+            }
+
+#if 0
+            //choose wall color
+            unsigned int color;
+            switch (map[map_x][map_y])
+            {
+            case 1:
+                color = 0xff0000ff;
+                break; //red
+            case 2:
+                color = 0xff00ff00;
+                break; //green
+            case 3:
+                color = 0xffff0000;
+                break; //blue
+            case 4:
+                color = 0xffffffff;
+                break; //white
+            default:
+                color = 0xff00ffff;
+                break; //yellow
+            }
+
+            //give x and y sides different brightness
+            //make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
+            if (side == 1)
+            {
+                color = (color >> 1) & 0x7f7f7f;
+            }
+
+            // draw the pixels of the stripe as a vertical line
+            for (int y = draw_start; y < draw_end; y++)
+            {
+                pixels[y * SCREEN_WIDTH + x] = color;
+            }
+#else
+            // texturing calculations
+            char tex_index = map[map_x][map_y] - 1; // 1 subtracted from it so that texture 0 can be used!
+            SDL_Surface *tex = textures[tex_index];
+
+            // calculate value of wall_x
+            double wall_x; //where exactly the wall was hit
+            if (side == 0)
+            {
+                wall_x = pos_y + perp_wall_dist * ray_dir_y;
+            }
+            else
+            {
+                wall_x = pos_x + perp_wall_dist * ray_dir_x;
+            }
+            wall_x -= floor(wall_x);
+
+            // x coordinate on the texture
+            int tex_x = (int)(wall_x * (double)tex->w);
+            if (side == 0 && ray_dir_x > 0)
+            {
+                tex_x = tex->w - tex_x - 1;
+            }
+            if (side == 1 && ray_dir_y < 0)
+            {
+                tex_x = tex->w - tex_x - 1;
+            }
+
+            // draw the pixels of the stripe as a vertical line
+            for (int y = draw_start; y < draw_end; y++)
+            {
+                int d = y * 256 - SCREEN_HEIGHT * 128 + line_height * 128; //256 and 128 factors to avoid floats
+                int tex_y = ((d * tex->h) / line_height) / 256;
+
+                SDL_LockSurface(tex);
+                unsigned int tex_pixel = get_pixel(tex, tex_x, tex_y);
+                SDL_UnlockSurface(tex);
+
+                // make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
+                if (side == 1)
                 {
-                    // determine ceiling color
-                    unsigned int ceiling_color = 0xffff0000;
-
-                    // draw the color
-                    pixels[y * SCREEN_WIDTH + x] = ceiling_color;
+                    tex_pixel = (tex_pixel >> 1) & 0x7f7f7f;
                 }
-                // check if this is a wall
-                else if (y >= ceiling_y && y <= floor_y)
-                {
-                    // determine wall color
-                    unsigned int wall_color = 0x00000000;
 
-                    // find the sample y
-                    double sample_y = ((double)y - (double)ceiling_y) / ((double)floor_y - (double)ceiling_y);
+                pixels[y * SCREEN_WIDTH + x] = tex_pixel;
+            }
+#endif
 
-                    // determine which texture based on map coordinates
-                    int tex_num = map[map_x][map_y] - 1;
+            // draw the floor
+            unsigned int grey = 0xff646464;
 
-                    // get the pixel from the texture based on the sample coordinates
-                    int tex_x = (int)(sample_y * TEX_HEIGHT);
-                    int tex_y = (int)(sample_x * TEX_WIDTH);
+            for (int y = draw_end; y < SCREEN_HEIGHT; y++)
+            {
+                pixels[y * SCREEN_WIDTH + x] = grey;
+            }
 
-                    // set the color to that
-                    if (tex_x < TEX_WIDTH && tex_y < TEX_HEIGHT)
-                    {
-                        wall_color = textures[tex_num][tex_x][tex_y];
-                    }
+            // draw the ceiling
+            grey = (grey >> 1) & 0x7f7f7f;
 
-                    // draw the color
-                    pixels[y * SCREEN_WIDTH + x] = wall_color;
-                }
-                // this is a floor
-                else
-                {
-                    // determine floor color
-                    unsigned int floor_color = 0xff00ff00;
-
-                    // draw the color
-                    pixels[y * SCREEN_WIDTH + x] = floor_color;
-                }
+            for (int y = 0; y < draw_start; y++)
+            {
+                pixels[y * SCREEN_WIDTH + x] = grey;
             }
         }
 
@@ -447,6 +577,13 @@ int main(int argc, char *args[])
     }
 
     free(pixels);
+
+    for (int i = 0; i < 8; i++)
+    {
+        SDL_Surface *tex = textures[i];
+        SDL_FreeSurface(tex);
+    }
+    IMG_Quit();
 
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
