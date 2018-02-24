@@ -223,8 +223,9 @@ int main(int argc, char *args[])
             {
             case SDL_MOUSEMOTION:
             {
-                int x = event.motion.xrel;
-                double angle = -x / 1000.0 * ROTATE_SPEED;
+                int mouse_dx = event.motion.xrel;
+
+                double angle = -mouse_dx / 1000.0 * ROTATE_SPEED; // the constant value is in radians/second
 
                 //both camera direction and camera plane must be rotated
                 double old_dir_x = dir_x;
@@ -314,7 +315,6 @@ int main(int argc, char *args[])
 
         // apply input to player
         double move_speed = MOVE_SPEED * delta_time; //the constant value is in squares/second
-        double angle = ROTATE_SPEED * delta_time;    //the constant value is in radians/second
 
         if (lshift_down)
         {
@@ -389,32 +389,31 @@ int main(int argc, char *args[])
         // raycasting
         for (int x = 0; x < SCREEN_WIDTH; x++)
         {
-            //calculate ray position and direction
-            double camera_x = 2 * x / (double)SCREEN_WIDTH - 1; //x-coordinate in camera space
+            // calculate ray position and direction
+            double camera_x = 2 * x / (double)SCREEN_WIDTH - 1; // x-coordinate in camera space
             double ray_dir_x = dir_x + plane_x * camera_x;
             double ray_dir_y = dir_y + plane_y * camera_x;
 
-            //which box of the map we're in
+            // which box of the map we're in
             int map_x = (int)pos_x;
             int map_y = (int)pos_y;
 
-            //length of ray from current position to next x or y-side
+            // length of ray from current position to next x or y-side
             double side_dist_x;
             double side_dist_y;
 
-            //length of ray from one x or y-side to next x or y-side
+            // length of ray from one x or y-side to next x or y-side
             double delta_dist_x = fabs(1.0 / ray_dir_x);
             double delta_dist_y = fabs(1.0 / ray_dir_y);
             double perp_wall_dist;
 
-            //what direction to step in x or y-direction (either +1 or -1)
+            // what direction to step in x or y-direction (either +1 or -1)
             int step_x;
             int step_y;
 
-            int hit = 0; //was there a wall hit?
-            int side;    //was a NS or a EW wall hit?
+            int side; // was a NS or a EW wall hit?
 
-            //calculate step and initial sideDist
+            // calculate step and initial sideDist
             if (ray_dir_x < 0)
             {
                 step_x = -1;
@@ -436,10 +435,10 @@ int main(int argc, char *args[])
                 side_dist_y = (map_y + 1.0 - pos_y) * delta_dist_y;
             }
 
-            //perform DDA
-            while (hit == 0)
+            // perform DDA
+            while (true)
             {
-                //jump to next map square, OR in x-direction, OR in y-direction
+                // jump to next map square, OR in x-direction, OR in y-direction
                 if (side_dist_x < side_dist_y)
                 {
                     side_dist_x += delta_dist_x;
@@ -453,14 +452,14 @@ int main(int argc, char *args[])
                     side = 1;
                 }
 
-                //Check if ray has hit a wall
+                // check if ray has hit a wall
                 if (map[map_x][map_y] > 0)
                 {
-                    hit = 1;
+                    break;
                 }
             }
 
-            //Calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
+            // calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
             if (side == 0)
             {
                 perp_wall_dist = (map_x - pos_x + (1 - step_x) / 2) / ray_dir_x;
@@ -472,10 +471,10 @@ int main(int argc, char *args[])
 
             depth_buffer[x] = perp_wall_dist;
 
-            //Calculate height of line to draw on screen
+            // calculate height of line to draw on screen
             int line_height = (int)((double)SCREEN_HEIGHT / perp_wall_dist);
 
-            //calculate lowest and highest pixel to fill in current stripe
+            // calculate lowest and highest pixel to fill in current stripe
             int draw_start = -line_height / 2 + SCREEN_HEIGHT / 2;
             if (draw_start < 0)
             {
@@ -488,7 +487,7 @@ int main(int argc, char *args[])
             }
 
 #if 0
-            //choose wall color
+            // choose wall color
             unsigned int color;
             switch (map[map_x][map_y])
             {
@@ -509,8 +508,8 @@ int main(int argc, char *args[])
                 break; //yellow
             }
 
-            //give x and y sides different brightness
-            //make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
+            // give x and y sides different brightness
+            // make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
             if (side == 1)
             {
                 color = (color >> 1) & 0x7f7f7f;
@@ -601,18 +600,19 @@ int main(int argc, char *args[])
         }
 
         double fov = (FOV * M_PI / 180.0);
-        bool pillar_in_fov = fabs(pillar_angle) < fov / 2.0;
+        double pillar_mid = (0.5 * (pillar_angle / (fov / 2.0)) + 0.5) * (double)SCREEN_WIDTH;
 
-        double pillar_dist = sqrt(pow(pillar_dir_x, 2) + pow(pillar_dir_y, 2));
+        double pillar_camera_x = 2 * pillar_mid / (double)SCREEN_WIDTH - 1;
+        double ray_dir_x = dir_x + plane_x * pillar_camera_x;
+        double pillar_dist = pillar_dir_x / ray_dir_x;
 
-        if (pillar_in_fov && pillar_dist >= 1.0 && pillar_dist < 16.0)
+        if (pillar_dist >= 1.0)
         {
             double pillar_ceiling = (double)SCREEN_HEIGHT / 2.0 - SCREEN_HEIGHT / pillar_dist;
             double pillar_floor = SCREEN_HEIGHT - pillar_ceiling;
             double pillar_height = pillar_floor - pillar_ceiling;
             double pillar_aspect_ratio = (double)pillar_sprite->h / (double)pillar_sprite->w;
             double pillar_width = pillar_height / pillar_aspect_ratio / 2.0;
-            double pillar_mid = (0.5 * (pillar_angle / (fov / 2.0)) + 0.5) * (double)SCREEN_WIDTH;
 
             for (int x = 0; x < pillar_width; x++)
             {
@@ -647,6 +647,9 @@ int main(int argc, char *args[])
 
     free(depth_buffer);
     free(pixels);
+
+    TTF_CloseFont(font);
+    TTF_Quit();
 
     for (int i = 0; i < 8; i++)
     {
