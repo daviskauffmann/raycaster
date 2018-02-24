@@ -120,7 +120,7 @@ int main(int argc, char *args[])
         window,
         -1,
         0);
-    SDL_Texture *texture = SDL_CreateTexture(
+    SDL_Texture *wall_texture = SDL_CreateTexture(
         renderer,
         SDL_PIXELFORMAT_ABGR8888,
         SDL_TEXTUREACCESS_STATIC,
@@ -143,9 +143,6 @@ int main(int argc, char *args[])
     textures[5] = IMG_Load("mossy.png");
     textures[6] = IMG_Load("wood.png");
     textures[7] = IMG_Load("colorstone.png");
-
-    SDL_Surface *sprites[1];
-    sprites[0] = IMG_Load("pillar.png");
 
     // map
     char map[MAP_WIDTH][MAP_HEIGHT] =
@@ -510,52 +507,6 @@ int main(int argc, char *args[])
             {
                 pixels[y * SCREEN_WIDTH + x] = color;
             }
-#else
-            // texturing calculations
-            char tex_index = map[map_x][map_y] - 1; // 1 subtracted from it so that texture 0 can be used!
-            SDL_Surface *tex = textures[tex_index];
-
-            // calculate value of wall_x
-            double wall_x; //where exactly the wall was hit
-            if (side == 0)
-            {
-                wall_x = pos_y + perp_wall_dist * ray_dir_y;
-            }
-            else
-            {
-                wall_x = pos_x + perp_wall_dist * ray_dir_x;
-            }
-            wall_x -= floor(wall_x);
-
-            // x coordinate on the texture
-            int tex_x = (int)(wall_x * (double)tex->w);
-            if (side == 0 && ray_dir_x > 0)
-            {
-                tex_x = tex->w - tex_x - 1;
-            }
-            if (side == 1 && ray_dir_y < 0)
-            {
-                tex_x = tex->w - tex_x - 1;
-            }
-
-            // draw the pixels of the stripe as a vertical line
-            for (int y = draw_start; y < draw_end; y++)
-            {
-                int d = y * 256 - SCREEN_HEIGHT * 128 + line_height * 128; //256 and 128 factors to avoid floats
-                // TODO: avoid the division to speed this up
-                int tex_y = ((d * tex->h) / line_height) / 256;
-
-                unsigned int tex_pixel = get_pixel(tex, tex_x, tex_y);
-
-                // make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
-                if (side == 1)
-                {
-                    tex_pixel = (tex_pixel >> 1) & 0x7f7f7f;
-                }
-
-                pixels[y * SCREEN_WIDTH + x] = tex_pixel;
-            }
-#endif
 
             // draw the floor
             unsigned int grey = 0xff646464;
@@ -572,16 +523,124 @@ int main(int argc, char *args[])
             {
                 pixels[y * SCREEN_WIDTH + x] = grey;
             }
+#else
+            // calculate value of wall_x
+            double wall_x; //where exactly the wall was hit
+            if (side == 0)
+            {
+                wall_x = pos_y + perp_wall_dist * ray_dir_y;
+            }
+            else
+            {
+                wall_x = pos_x + perp_wall_dist * ray_dir_x;
+            }
+            wall_x -= floor(wall_x);
+
+            // texturing calculations
+            char wall_texture_index = map[map_x][map_y] - 1; // 1 subtracted from it so that texture 0 can be used!
+            SDL_Surface *wall_texture = textures[wall_texture_index];
+
+            // x coordinate on the wall_texture
+            int wall_texture_x = (int)(wall_x * (double)wall_texture->w);
+            if (side == 0 && ray_dir_x > 0)
+            {
+                wall_texture_x = wall_texture->w - wall_texture_x - 1;
+            }
+            if (side == 1 && ray_dir_y < 0)
+            {
+                wall_texture_x = wall_texture->w - wall_texture_x - 1;
+            }
+
+            // draw the pixels of the stripe as a vertical line
+            for (int y = draw_start; y < draw_end; y++)
+            {
+                int d = y * 256 - SCREEN_HEIGHT * 128 + line_height * 128; //256 and 128 factors to avoid floats
+                // TODO: avoid the division to speed this up
+                int wall_texture_y = ((d * wall_texture->h) / line_height) / 256;
+
+                unsigned int wall_texture_pixel = get_pixel(wall_texture, wall_texture_x, wall_texture_y);
+
+                // make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
+                if (side == 1)
+                {
+                    wall_texture_pixel = (wall_texture_pixel >> 1) & 0x7f7f7f;
+                }
+
+                pixels[y * SCREEN_WIDTH + x] = wall_texture_pixel;
+            }
+
+            // floorcasting
+            double floor_x_wall, floor_y_wall; // the x, y position of the floor texture at the bottom of the wall
+
+            // 4 different wall directions possible
+            if (side == 0 && ray_dir_x > 0)
+            {
+                floor_x_wall = map_x;
+                floor_y_wall = map_y + wall_x;
+            }
+            else if (side == 0 && ray_dir_x < 0)
+            {
+                floor_x_wall = map_x + 1.0;
+                floor_y_wall = map_y + wall_x;
+            }
+            else if (side == 1 && ray_dir_y > 0)
+            {
+                floor_x_wall = map_x + wall_x;
+                floor_y_wall = map_y;
+            }
+            else
+            {
+                floor_x_wall = map_x + wall_x;
+                floor_y_wall = map_y + 1.0;
+            }
+
+            double dist_wall, dist_player, current_dist;
+
+            dist_wall = perp_wall_dist;
+            dist_player = 0.0;
+
+            if (draw_end < 0)
+                draw_end = SCREEN_HEIGHT; // becomes < 0 when the integer overflows
+
+            // draw the floor from draw_end to the bottom of the screen
+            for (int y = draw_end + 1; y < SCREEN_HEIGHT; y++)
+            {
+                current_dist = SCREEN_HEIGHT / (2.0 * y - SCREEN_HEIGHT); // you could make a small lookup table for this instead
+
+                double weight = (current_dist - dist_player) / (dist_wall - dist_player);
+
+                double current_floor_x = weight * floor_x_wall + (1.0 - weight) * pos_x;
+                double current_floor_y = weight * floor_y_wall + (1.0 - weight) * pos_y;
+
+                int floor_texture_index = 3;
+                SDL_Surface *floor_texture = textures[floor_texture_index];
+
+                int ceiling_texture_index = 6;
+                SDL_Surface *ceiling_texture = textures[ceiling_texture_index];
+
+                int texture_x, texture_y;
+                texture_x = (int)(current_floor_x * floor_texture->w) % floor_texture->w;
+                texture_y = (int)(current_floor_y * floor_texture->h) % floor_texture->h;
+
+                unsigned int floor_texture_pixel = get_pixel(floor_texture, texture_x, texture_y);
+                unsigned int ceiling_texture_pixel = get_pixel(ceiling_texture, texture_x, texture_y);
+
+                // floor
+                pixels[x + y * SCREEN_WIDTH] = floor_texture_pixel;
+                // ceiling (symmetrical!)
+                pixels[x + (SCREEN_HEIGHT - y) * SCREEN_WIDTH] = (ceiling_texture_pixel >> 1) & 0x7f7f7f;
+            }
+#endif
         }
 
         // draw to screen
         SDL_UpdateTexture(
-            texture,
+            wall_texture,
             NULL,
             pixels,
             SCREEN_WIDTH * sizeof(unsigned int));
         SDL_RenderClear(renderer);
-        SDL_RenderCopy(renderer, texture, NULL, NULL);
+        SDL_RenderCopy(renderer, wall_texture, NULL, NULL);
         SDL_RenderPresent(renderer);
     }
 
@@ -592,12 +651,12 @@ int main(int argc, char *args[])
 
     for (int i = 0; i < 8; i++)
     {
-        SDL_Surface *tex = textures[i];
-        SDL_FreeSurface(tex);
+        SDL_Surface *wall_texture = textures[i];
+        SDL_FreeSurface(wall_texture);
     }
     IMG_Quit();
 
-    SDL_DestroyTexture(texture);
+    SDL_DestroyTexture(wall_texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
