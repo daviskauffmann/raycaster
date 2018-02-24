@@ -135,14 +135,14 @@ int main(int argc, char *args[])
 
     // textures
     SDL_Surface *textures[8];
-    textures[0] = IMG_Load("bluestone.png");
-    textures[1] = IMG_Load("colorstone.png");
-    textures[2] = IMG_Load("eagle.png");
+    textures[0] = IMG_Load("eagle.png");
+    textures[1] = IMG_Load("redbrick.png");
+    textures[2] = IMG_Load("purplestone.png");
     textures[3] = IMG_Load("greystone.png");
-    textures[4] = IMG_Load("mossy.png");
-    textures[5] = IMG_Load("redbrick.png");
-    textures[6] = IMG_Load("purplestone.png");
-    textures[7] = IMG_Load("wood.png");
+    textures[4] = IMG_Load("bluestone.png");
+    textures[5] = IMG_Load("mossy.png");
+    textures[6] = IMG_Load("wood.png");
+    textures[7] = IMG_Load("colorstone.png");
 
     SDL_Surface *sprites[1];
     sprites[0] = IMG_Load("pillar.png");
@@ -150,47 +150,39 @@ int main(int argc, char *args[])
     // map
     char map[MAP_WIDTH][MAP_HEIGHT] =
         {
-            {4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 7, 7, 7, 7, 7, 7, 7, 7},
-            {4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 7},
-            {4, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7},
-            {4, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7},
-            {4, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 7},
-            {4, 0, 4, 0, 0, 0, 0, 5, 5, 5, 5, 5, 5, 5, 5, 5, 7, 7, 0, 7, 7, 7, 7, 7},
-            {4, 0, 5, 0, 0, 0, 0, 5, 0, 5, 0, 5, 0, 5, 0, 5, 7, 0, 0, 0, 7, 7, 7, 1},
-            {4, 0, 6, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 7, 0, 0, 0, 0, 0, 0, 8},
-            {4, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7, 7, 1},
-            {4, 0, 8, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 7, 0, 0, 0, 0, 0, 0, 8},
-            {4, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 5, 7, 0, 0, 0, 7, 7, 7, 1},
-            {4, 0, 0, 0, 0, 0, 0, 5, 5, 5, 5, 0, 5, 5, 5, 5, 7, 7, 7, 7, 7, 7, 7, 1},
-            {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 0, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-            {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
-            {6, 6, 6, 6, 6, 6, 0, 6, 6, 6, 6, 0, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-            {4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 6, 0, 6, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3},
-            {4, 0, 0, 0, 0, 0, 0, 0, 0, 4, 6, 0, 6, 2, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2},
-            {4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 2, 0, 0, 5, 0, 0, 2, 0, 0, 0, 2},
-            {4, 0, 0, 0, 0, 0, 0, 0, 0, 4, 6, 0, 6, 2, 0, 0, 0, 0, 0, 2, 2, 0, 2, 2},
-            {4, 0, 6, 0, 6, 0, 0, 0, 0, 4, 6, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 2},
-            {4, 0, 0, 5, 0, 0, 0, 0, 0, 4, 6, 0, 6, 2, 0, 0, 0, 0, 0, 2, 2, 0, 2, 2},
-            {4, 0, 6, 0, 6, 0, 0, 0, 0, 4, 6, 0, 6, 2, 0, 0, 5, 0, 0, 2, 0, 0, 0, 2},
-            {4, 0, 0, 0, 0, 0, 0, 0, 0, 4, 6, 0, 6, 2, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2},
-            {4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}};
+            {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
+            {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
+            {8, 0, 3, 3, 0, 0, 0, 0, 0, 8, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6},
+            {8, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6},
+            {8, 0, 3, 3, 0, 0, 0, 0, 0, 8, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
+            {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 4, 0, 0, 0, 0, 0, 6, 6, 6, 0, 6, 4, 6},
+            {8, 8, 8, 8, 0, 8, 8, 8, 8, 8, 8, 4, 4, 4, 4, 4, 4, 6, 0, 0, 0, 0, 0, 6},
+            {7, 7, 7, 7, 0, 7, 7, 7, 7, 0, 8, 0, 8, 0, 8, 0, 8, 4, 0, 4, 0, 6, 0, 6},
+            {7, 7, 0, 0, 0, 0, 0, 0, 7, 8, 0, 8, 0, 8, 0, 8, 8, 6, 0, 0, 0, 0, 0, 6},
+            {7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 6, 0, 0, 0, 0, 0, 4},
+            {7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 6, 0, 6, 0, 6, 0, 6},
+            {7, 7, 0, 0, 0, 0, 0, 0, 7, 8, 0, 8, 0, 8, 0, 8, 8, 6, 4, 6, 0, 6, 6, 6},
+            {7, 7, 7, 7, 0, 7, 7, 7, 7, 8, 8, 4, 0, 6, 8, 4, 8, 3, 3, 3, 0, 3, 3, 3},
+            {2, 2, 2, 2, 0, 2, 2, 2, 2, 4, 6, 4, 0, 0, 6, 0, 6, 3, 0, 0, 0, 0, 0, 3},
+            {2, 2, 0, 0, 0, 0, 0, 2, 2, 4, 0, 0, 0, 0, 0, 0, 4, 3, 0, 0, 0, 0, 0, 3},
+            {2, 0, 0, 0, 0, 0, 0, 0, 2, 4, 0, 0, 0, 0, 0, 0, 4, 3, 0, 0, 0, 0, 0, 3},
+            {1, 0, 0, 0, 0, 0, 0, 0, 1, 4, 4, 4, 4, 4, 6, 0, 6, 3, 3, 0, 0, 0, 3, 3},
+            {2, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 1, 2, 2, 2, 6, 6, 0, 0, 5, 0, 5, 0, 5},
+            {2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 2, 2, 0, 5, 0, 5, 0, 0, 0, 5, 5},
+            {2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 5, 0, 5, 0, 5, 0, 5, 0, 5},
+            {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5},
+            {2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 5, 0, 5, 0, 5, 0, 5, 0, 5},
+            {2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 2, 2, 0, 5, 0, 5, 0, 0, 0, 5, 5},
+            {2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5}};
 
     // player
-    double pos_x = 22.0;
-    double pos_y = 11.5;
-    double dir_x = -1;
-    double dir_y = 0;
-    double plane_x = 0;
-    double plane_y = FOV / 100.0;
-
-    // pillar
-    double pillar_x = 22.0;
-    double pillar_y = 11.5;
+    double pos_x = 22.0, pos_y = 11.5;         // x and y start position
+    double dir_x = -1, dir_y = 0;              // initial direction vector
+    double plane_x = 0, plane_y = FOV / 100.0; // the 2d raycaster version of camera plane
 
     // timing
-    unsigned int old_time = SDL_GetTicks();
-    unsigned int current_time = 0;
-    double delta_time = 0.0;
+    unsigned int previous_time = 0; // time of current frame
+    unsigned int current_time = 0;  // time of previous frame
 
     // input
     bool w_down = false;
@@ -201,16 +193,16 @@ int main(int argc, char *args[])
 
     // rendering
     unsigned int *pixels = malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(unsigned int));
-    double *depth_buffer = malloc(SCREEN_WIDTH * sizeof(double));
 
     bool quit = false;
     while (!quit)
     {
         // calculate delta time
-        old_time = current_time;
+        previous_time = current_time;
         current_time = SDL_GetTicks();
-        delta_time = (current_time - old_time) / 1000.0;
+        double delta_time = (current_time - previous_time) / 1000.0; // difference between current and previous time (ms)
 
+        // update window title
         char buffer[256];
         snprintf(buffer, sizeof(buffer), "%s - FPS: %d", TITLE, (int)(1 / delta_time));
         SDL_SetWindowTitle(window, buffer);
@@ -227,7 +219,7 @@ int main(int argc, char *args[])
 
                 double angle = -mouse_dx / 1000.0 * ROTATE_SPEED; // the constant value is in radians/second
 
-                //both camera direction and camera plane must be rotated
+                // both camera direction and camera plane must be rotated
                 double old_dir_x = dir_x;
                 dir_x = dir_x * cos(angle) - dir_y * sin(angle);
                 dir_y = old_dir_x * sin(angle) + dir_y * cos(angle);
@@ -314,7 +306,7 @@ int main(int argc, char *args[])
         }
 
         // apply input to player
-        double move_speed = MOVE_SPEED * delta_time; //the constant value is in squares/second
+        double move_speed = MOVE_SPEED * delta_time; // the constant value is in squares/second
 
         if (lshift_down)
         {
@@ -405,7 +397,6 @@ int main(int argc, char *args[])
             // length of ray from one x or y-side to next x or y-side
             double delta_dist_x = fabs(1.0 / ray_dir_x);
             double delta_dist_y = fabs(1.0 / ray_dir_y);
-            double perp_wall_dist;
 
             // what direction to step in x or y-direction (either +1 or -1)
             int step_x;
@@ -460,6 +451,8 @@ int main(int argc, char *args[])
             }
 
             // calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
+            double perp_wall_dist;
+
             if (side == 0)
             {
                 perp_wall_dist = (map_x - pos_x + (1 - step_x) / 2) / ray_dir_x;
@@ -468,8 +461,6 @@ int main(int argc, char *args[])
             {
                 perp_wall_dist = (map_y - pos_y + (1 - step_y) / 2) / ray_dir_y;
             }
-
-            depth_buffer[x] = perp_wall_dist;
 
             // calculate height of line to draw on screen
             int line_height = (int)((double)SCREEN_HEIGHT / perp_wall_dist);
@@ -508,7 +499,6 @@ int main(int argc, char *args[])
                 break; //yellow
             }
 
-            // give x and y sides different brightness
             // make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
             if (side == 1)
             {
@@ -552,6 +542,7 @@ int main(int argc, char *args[])
             for (int y = draw_start; y < draw_end; y++)
             {
                 int d = y * 256 - SCREEN_HEIGHT * 128 + line_height * 128; //256 and 128 factors to avoid floats
+                // TODO: avoid the division to speed this up
                 int tex_y = ((d * tex->h) / line_height) / 256;
 
                 unsigned int tex_pixel = get_pixel(tex, tex_x, tex_y);
@@ -583,57 +574,6 @@ int main(int argc, char *args[])
             }
         }
 
-        // objects
-        SDL_Surface *pillar_sprite = sprites[0];
-
-        double pillar_dir_x = pillar_x - pos_x;
-        double pillar_dir_y = pillar_y - pos_y;
-
-        double pillar_angle = atan2(dir_y, dir_x) - atan2(pillar_dir_y, pillar_dir_x);
-        if (pillar_angle < -M_PI)
-        {
-            pillar_angle += M_PI * 2.0;
-        }
-        if (pillar_angle > M_PI)
-        {
-            pillar_angle -= M_PI * 2.0;
-        }
-
-        double fov = (FOV * M_PI / 180.0);
-        double pillar_mid = (0.5 * (pillar_angle / (fov / 2.0)) + 0.5) * (double)SCREEN_WIDTH;
-
-        double pillar_camera_x = 2 * pillar_mid / (double)SCREEN_WIDTH - 1;
-        double ray_dir_x = dir_x + plane_x * pillar_camera_x;
-        double pillar_dist = pillar_dir_x / ray_dir_x;
-
-        if (pillar_dist >= 1.0)
-        {
-            double pillar_ceiling = (double)SCREEN_HEIGHT / 2.0 - SCREEN_HEIGHT / pillar_dist;
-            double pillar_floor = SCREEN_HEIGHT - pillar_ceiling;
-            double pillar_height = pillar_floor - pillar_ceiling;
-            double pillar_aspect_ratio = (double)pillar_sprite->h / (double)pillar_sprite->w;
-            double pillar_width = pillar_height / pillar_aspect_ratio / 2.0;
-
-            for (int x = 0; x < pillar_width; x++)
-            {
-                for (int y = 0; y < pillar_height; y++)
-                {
-                    int tex_x = x * pillar_sprite->w / pillar_width;
-                    int tex_y = y * pillar_sprite->h / pillar_height;
-                    unsigned int tex_pixel = get_pixel(pillar_sprite, tex_x, tex_y);
-                    int screen_x = pillar_mid + x - (pillar_width / 2.0);
-                    int screen_y = pillar_ceiling + y;
-                    if (screen_x >= 0 && screen_x < SCREEN_WIDTH && screen_y >= 0 && screen_y < SCREEN_HEIGHT)
-                    {
-                        if (tex_pixel > 0 && depth_buffer[screen_x] >= pillar_dist)
-                        {
-                            pixels[screen_y * SCREEN_WIDTH + screen_x] = tex_pixel;
-                        }
-                    }
-                }
-            }
-        }
-
         // draw to screen
         SDL_UpdateTexture(
             texture,
@@ -645,7 +585,6 @@ int main(int argc, char *args[])
         SDL_RenderPresent(renderer);
     }
 
-    free(depth_buffer);
     free(pixels);
 
     TTF_CloseFont(font);
