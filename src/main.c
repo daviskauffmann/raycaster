@@ -1,6 +1,6 @@
 #include <math.h>
-#include <SDL.h>
-#include <SDL_image.h>
+#include <SDL2\SDL.h>
+#include <SDL2\SDL_image.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,7 +14,7 @@
 
 #define MOVE_SPEED 5.0
 #define SPRINT_MULT 2.0
-#define ROTATE_SPEED 3.14
+#define ROTATE_SPEED 3.0
 
 #define FOV 66
 
@@ -64,7 +64,7 @@ unsigned int get_pixel(SDL_Surface *surface, int x, int y)
 void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
 {
     int bpp = surface->format->BytesPerPixel;
-    /* Here p is the address to the pixel we want to set */
+    // Here p is the address to the pixel we want to set
     unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
 
     switch (bpp)
@@ -136,9 +136,12 @@ int main(int argc, char *args[])
     textures[2] = IMG_Load("eagle.png");
     textures[3] = IMG_Load("greystone.png");
     textures[4] = IMG_Load("mossy.png");
-    textures[5] = IMG_Load("purplestone.png");
-    textures[6] = IMG_Load("redbrick.png");
+    textures[5] = IMG_Load("redbrick.png");
+    textures[6] = IMG_Load("purplestone.png");
     textures[7] = IMG_Load("wood.png");
+
+    SDL_Surface *sprites[1];
+    sprites[0] = IMG_Load("pillar.png");
 
     // map
     char map[MAP_WIDTH][MAP_HEIGHT] =
@@ -176,6 +179,10 @@ int main(int argc, char *args[])
     double plane_x = 0;
     double plane_y = FOV / 100.0;
 
+    // pillar
+    double pillar_x = 22.0;
+    double pillar_y = 11.5;
+
     // timing
     unsigned int old_time = SDL_GetTicks();
     unsigned int current_time = 0;
@@ -194,15 +201,6 @@ int main(int argc, char *args[])
     bool quit = false;
     while (!quit)
     {
-        // clear screen
-        for (int x = 0; x < SCREEN_WIDTH; x++)
-        {
-            for (int y = 0; y < SCREEN_HEIGHT; y++)
-            {
-                pixels[y * SCREEN_WIDTH + x] = 0;
-            }
-        }
-
         // calculate delta time
         old_time = current_time;
         current_time = SDL_GetTicks();
@@ -221,16 +219,16 @@ int main(int argc, char *args[])
             case SDL_MOUSEMOTION:
             {
                 int x = event.motion.xrel;
-                double rotate_speed = -x / 1000.0 * ROTATE_SPEED;
+                double angle = -x / 1000.0 * ROTATE_SPEED;
 
                 //both camera direction and camera plane must be rotated
                 double old_dir_x = dir_x;
-                dir_x = dir_x * cos(rotate_speed) - dir_y * sin(rotate_speed);
-                dir_y = old_dir_x * sin(rotate_speed) + dir_y * cos(rotate_speed);
+                dir_x = dir_x * cos(angle) - dir_y * sin(angle);
+                dir_y = old_dir_x * sin(angle) + dir_y * cos(angle);
 
                 double old_plane_x = plane_x;
-                plane_x = plane_x * cos(rotate_speed) - plane_y * sin(rotate_speed);
-                plane_y = old_plane_x * sin(rotate_speed) + plane_y * cos(rotate_speed);
+                plane_x = plane_x * cos(angle) - plane_y * sin(angle);
+                plane_y = old_plane_x * sin(angle) + plane_y * cos(angle);
             }
             break;
             case SDL_KEYDOWN:
@@ -310,8 +308,8 @@ int main(int argc, char *args[])
         }
 
         // apply input to player
-        double move_speed = MOVE_SPEED * delta_time;     //the constant value is in squares/second
-        double rotate_speed = ROTATE_SPEED * delta_time; //the constant value is in radians/second
+        double move_speed = MOVE_SPEED * delta_time; //the constant value is in squares/second
+        double angle = ROTATE_SPEED * delta_time;    //the constant value is in radians/second
 
         if (lshift_down)
         {
@@ -329,9 +327,13 @@ int main(int argc, char *args[])
             double dy = dir_y * move_speed;
 
             if (map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
+            {
                 pos_x += dx;
+            }
             if (map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
+            {
                 pos_y += dy;
+            }
         }
 
         if (a_down)
@@ -340,9 +342,13 @@ int main(int argc, char *args[])
             double dy = dir_x * move_speed;
 
             if (map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
+            {
                 pos_x += dx;
+            }
             if (map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
+            {
                 pos_y += dy;
+            }
         }
 
         if (s_down)
@@ -351,9 +357,13 @@ int main(int argc, char *args[])
             double dy = -dir_y * move_speed;
 
             if (map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
+            {
                 pos_x += dx;
+            }
             if (map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
+            {
                 pos_y += dy;
+            }
         }
 
         if (d_down)
@@ -362,9 +372,13 @@ int main(int argc, char *args[])
             double dy = -dir_x * move_speed;
 
             if (map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
+            {
                 pos_x += dx;
+            }
             if (map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
+            {
                 pos_y += dy;
+            }
         }
 
         // raycasting
@@ -384,8 +398,8 @@ int main(int argc, char *args[])
             double side_dist_y;
 
             //length of ray from one x or y-side to next x or y-side
-            double delta_dist_x = fabs(1 / ray_dir_x);
-            double delta_dist_y = fabs(1 / ray_dir_y);
+            double delta_dist_x = fabs(1.0 / ray_dir_x);
+            double delta_dist_y = fabs(1.0 / ray_dir_y);
             double perp_wall_dist;
 
             //what direction to step in x or y-direction (either +1 or -1)
@@ -534,9 +548,7 @@ int main(int argc, char *args[])
                 int d = y * 256 - SCREEN_HEIGHT * 128 + line_height * 128; //256 and 128 factors to avoid floats
                 int tex_y = ((d * tex->h) / line_height) / 256;
 
-                SDL_LockSurface(tex);
                 unsigned int tex_pixel = get_pixel(tex, tex_x, tex_y);
-                SDL_UnlockSurface(tex);
 
                 // make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
                 if (side == 1)
@@ -562,6 +574,51 @@ int main(int argc, char *args[])
             for (int y = 0; y < draw_start; y++)
             {
                 pixels[y * SCREEN_WIDTH + x] = grey;
+            }
+        }
+
+        // objects
+        SDL_Surface *pillar_sprite = sprites[0];
+
+        double pillar_dir_x = pillar_x - pos_x;
+        double pillar_dir_y = pillar_y - pos_y;
+
+        double pillar_angle = atan2(dir_y, dir_x) - atan2(pillar_dir_y, pillar_dir_x);
+        if (pillar_angle < -M_PI)
+        {
+            pillar_angle += M_PI * 2.0;
+        }
+        if (pillar_angle > M_PI)
+        {
+            pillar_angle -= M_PI * 2.0;
+        }
+        double fov = (FOV * M_PI / 180.0);
+        bool pillar_in_fov = fabs(pillar_angle) < fov / 2.0;
+        double pillar_dist = sqrt(pow(pillar_dir_x, 2) + pow(pillar_dir_y, 2));
+
+        if (pillar_in_fov && pillar_dist >= 1.0 && pillar_dist < 16.0)
+        {
+            double pillar_ceiling = (double)SCREEN_HEIGHT / 2.0 - SCREEN_HEIGHT / pillar_dist;
+            double pillar_floor = SCREEN_HEIGHT - pillar_ceiling;
+            double pillar_height = pillar_floor - pillar_ceiling;
+            double pillar_aspect_ratio = (double)pillar_sprite->h / (double)pillar_sprite->w;
+            double pillar_width = pillar_height / pillar_aspect_ratio / 2.0;
+            double pillar_mid = (0.5 * (pillar_angle / (fov / 2.0)) + 0.5) * (double)SCREEN_WIDTH;
+
+            for (int x = 0; x < pillar_width; x++)
+            {
+                for (int y = 0; y < pillar_height; y++)
+                {
+                    int tex_x = x * pillar_sprite->w / pillar_width;
+                    int tex_y = y * pillar_sprite->h / pillar_height;
+                    unsigned int tex_pixel = get_pixel(pillar_sprite, tex_x, tex_y);
+                    int screen_x = pillar_mid + x - (pillar_width / 2.0);
+                    int screen_y = pillar_ceiling + y;
+                    if (screen_x >= 0 && screen_x < SCREEN_WIDTH && screen_y >= 0 && screen_y < SCREEN_HEIGHT)
+                    {
+                        pixels[screen_y * SCREEN_WIDTH + screen_x] = tex_pixel;
+                    }
+                }
             }
         }
 
