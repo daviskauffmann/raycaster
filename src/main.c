@@ -909,14 +909,14 @@ int main(int argc, char *args[])
         }
 
         char text_buffer[256];
-        sprintf(text_buffer, "%s", "Hello, World!");
+        sprintf(text_buffer, "FPS: %d", (int)(1 / delta_time));
         SDL_Surface *text_surface = TTF_RenderText_Solid(font, text_buffer, (SDL_Color){255, 255, 255, 255});
         SDL_Texture *text = SDL_CreateTextureFromSurface(renderer, text_surface);
         SDL_Rect text_rect;
         text_rect.x = 0;
         text_rect.y = 0;
-        text_rect.w = 14 * 24;
-        text_rect.h = 24;
+        text_rect.w = SCREEN_WIDTH / 5;
+        text_rect.h = SCREEN_HEIGHT / 6;
 
         // update the screen
         SDL_UpdateTexture(
