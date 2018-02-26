@@ -2,6 +2,7 @@
 #include <SDL\SDL.h>
 #include <SDL\SDL_image.h>
 #include <SDL\SDL_net.h>
+#include <SDL\SDL_mixer.h>
 #include <SDL\SDL_ttf.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -24,6 +25,10 @@
 #define FLOOR_TEXTURE_MULT 1
 #define CEILING_TEXTURE_MULT 1
 
+#define SPRITE_SCALE_U 1
+#define SPRITE_SCALE_V 1
+#define SPRITE_MOVE_V 0.0
+
 typedef struct object_s
 {
     double x;
@@ -39,11 +44,14 @@ void comb_sort(int *order, double *dist, int amount);
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *screen = NULL;
-SDL_Surface *messages = NULL;
 
 /* SDL_image */
 SDL_Surface *textures[8];
 SDL_Surface *sprites[3];
+
+/* SDL_mixer */
+Mix_Music *music = NULL;
+Mix_Chunk *shoot = NULL;
 
 /* SDL_ttf */
 TTF_Font *font = NULL;
@@ -181,14 +189,14 @@ bool quit = false;
 
 int main(int argc, char *args[])
 {
-    // setup SDL
-    SDL_Init(SDL_INIT_VIDEO);
-    SDL_SetRelativeMouseMode(SDL_TRUE);
+    // init SDL
+    SDL_Init(SDL_INIT_EVERYTHING);
     IMG_Init(IMG_INIT_PNG);
     SDLNet_Init();
+    Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 4096);
     TTF_Init();
 
-    // setup window
+    // create window
     window = SDL_CreateWindow(
         TITLE,
         SDL_WINDOWPOS_UNDEFINED,
@@ -222,10 +230,16 @@ int main(int argc, char *args[])
     sprites[1] = IMG_Load("pillar.png");
     sprites[2] = IMG_Load("greenlight.png");
 
+    // load sounds
+    music = Mix_LoadMUS("music.mp3");
+    shoot = Mix_LoadWAV("shoot.wav");
+
     // load font
     font = TTF_OpenFont("VeraMono.ttf", 24);
 
     // printf("FOV: %f\n", 2 * atan(plane_y) / M_PI * 180.0);
+
+    SDL_SetRelativeMouseMode(SDL_TRUE);
 
     while (!quit)
     {
@@ -234,7 +248,7 @@ int main(int argc, char *args[])
         current_time = SDL_GetTicks();
         double delta_time = (current_time - previous_time) / 1000.0;
 
-        printf("FPS: %d, pos: (%f, %f), dir: (%f, %f), cam: (%f, %f)\n", (int)(1 / delta_time), pos_x, pos_y, dir_x, dir_y, plane_x, plane_y);
+        // printf("FPS: %d, pos: (%f, %f), dir: (%f, %f), cam: (%f, %f)\n", (int)(1 / delta_time), pos_x, pos_y, dir_x, dir_y, plane_x, plane_y);
 
         // handle input
         SDL_Event event;
@@ -242,6 +256,20 @@ int main(int argc, char *args[])
         {
             switch (event.type)
             {
+            case SDL_MOUSEBUTTONDOWN:
+            {
+                SDL_MouseButtonEvent button = event.button;
+
+                switch (button.button)
+                {
+                case SDL_BUTTON_LEFT:
+                {
+                    Mix_PlayChannel(-1, shoot, 0);
+                }
+                break;
+                }
+            }
+            break;
             case SDL_MOUSEMOTION:
             {
                 // the movement of the mouse in the x-direction
@@ -363,6 +391,33 @@ int main(int argc, char *args[])
                 case SDLK_F6:
                 {
                     draw_objects = !draw_objects;
+                }
+                break;
+                case SDLK_F7:
+                {
+                    if (Mix_PlayingMusic())
+                    {
+                        Mix_HaltMusic();
+                    }
+                    else
+                    {
+                        Mix_PlayMusic(music, -1);
+                    }
+                }
+                break;
+                case SDLK_F8:
+                {
+                    if (Mix_PlayingMusic())
+                    {
+                        if (Mix_PausedMusic())
+                        {
+                            Mix_ResumeMusic();
+                        }
+                        else
+                        {
+                            Mix_PauseMusic();
+                        }
+                    }
                 }
                 break;
                 }
@@ -584,7 +639,7 @@ int main(int argc, char *args[])
                         texture_x = texture->w - texture_x - 1;
                     }
 
-                    for (int y = draw_start; y < draw_end; y++)
+                    for (int y = draw_start; y <= draw_end; y++)
                     {
                         // y coordinate on the texture
                         int texture_y = (((y * 256 - SCREEN_HEIGHT * 128 + line_height * 128) * texture->h) / line_height) / 256;
@@ -680,7 +735,7 @@ int main(int argc, char *args[])
                             unsigned int texture_pixel = get_pixel(texture, texture_x, texture_y);
 
                             // draw the pixel slightly darkened
-                            buffer[SCREEN_HEIGHT - y][x] = (texture_pixel >> 1) & 0x7f7f7f;
+                            buffer[SCREEN_HEIGHT - y - 1][x] = (texture_pixel >> 1) & 0x7f7f7f;
                         }
                     }
                 }
@@ -717,7 +772,7 @@ int main(int argc, char *args[])
                     }
 
                     // draw the pixels of the stripe as a vertical line
-                    for (int y = draw_start; y < draw_end; y++)
+                    for (int y = draw_start; y <= draw_end; y++)
                     {
                         buffer[y][x] = wall_color;
                     }
@@ -730,7 +785,7 @@ int main(int argc, char *args[])
                     unsigned int ceiling_color = (floor_color >> 1) & 0x7f7f7f;
 
                     // draw the floor
-                    for (int y = draw_end; y < SCREEN_HEIGHT; y++)
+                    for (int y = draw_end + 1; y < SCREEN_HEIGHT; y++)
                     {
                         buffer[y][x] = floor_color;
                     }
@@ -754,16 +809,18 @@ int main(int argc, char *args[])
             for (int i = 0; i < NUM_OBJECTS; i++)
             {
                 object_order[i] = i;
-                object_dist[i] = pow(pos_x - objects[i].x, 2) + pow(pos_x - objects[i].y, 2);
+                object_dist[i] = pow(pos_x - objects[i].x, 2) + pow(pos_y - objects[i].y, 2);
             }
             comb_sort(object_order, object_dist, NUM_OBJECTS);
 
             // after sorting the objects, do the projection and draw them
             for (int i = 0; i < NUM_OBJECTS; i++)
             {
+                object_t object = objects[object_order[i]];
+
                 // translate object position to relative to camera
-                double object_x = objects[object_order[i]].x - pos_x;
-                double object_y = objects[object_order[i]].y - pos_y;
+                double object_x = object.x - pos_x;
+                double object_y = object.y - pos_y;
 
                 // transform object with the inverse camera matrix
                 // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
@@ -781,8 +838,8 @@ int main(int argc, char *args[])
 
                 // calculate width and height of the object on screen
                 // using "transform_y" instead of the real distance prevents fisheye
-                int object_height = abs((int)(SCREEN_HEIGHT / (transform_y)));
-                int object_width = abs((int)(SCREEN_HEIGHT / (transform_y)));
+                int object_width = abs((int)(SCREEN_HEIGHT / (transform_y))) * SPRITE_SCALE_U;
+                int object_height = abs((int)(SCREEN_HEIGHT / (transform_y))) * SPRITE_SCALE_V;
 
                 // calculate the vertical stripes to draw the object
                 int draw_start_x = -object_width / 2 + object_screen_x;
@@ -796,24 +853,30 @@ int main(int argc, char *args[])
                     draw_end_x = SCREEN_WIDTH - 1;
                 }
 
+                // move the object on the screen
+                int move_v = (int)(SPRITE_MOVE_V / transform_y);
+
                 // calculate lowest and highest pixel to fill in current stripe
-                int draw_start_y = -object_height / 2 + SCREEN_HEIGHT / 2;
+                int draw_start_y = -object_height / 2 + SCREEN_HEIGHT / 2 + move_v;
                 if (draw_start_y < 0)
                 {
                     draw_start_y = 0;
                 }
-                int draw_end_y = object_height / 2 + SCREEN_HEIGHT / 2;
+                int draw_end_y = object_height / 2 + SCREEN_HEIGHT / 2 + move_v;
                 if (draw_end_y >= SCREEN_HEIGHT)
                 {
                     draw_end_y = SCREEN_HEIGHT - 1;
                 }
 
+                // calculate angle of object to player
+                double angle = atan2(object.y - pos_y, object.x - pos_x);
+
                 // choose the sprite
-                int sprite_index = objects[object_order[i]].sprite_index;
+                int sprite_index = object.sprite_index;
                 SDL_Surface *sprite = sprites[sprite_index];
 
                 // loop through every vertical stripe of the sprite on screen
-                for (int x = draw_start_x; x < draw_end_x; x++)
+                for (int x = draw_start_x; x <= draw_end_x; x++)
                 {
                     // x coordinate on the sprite
                     int sprite_x = (256 * (x - (-object_width / 2 + object_screen_x)) * sprite->w / object_width) / 256;
@@ -824,10 +887,10 @@ int main(int argc, char *args[])
                     //3) it's on the screen (right)
                     //4) depth_buffer, with perpendicular distance
                     if (transform_y > 0 && x > 0 && x < SCREEN_WIDTH && transform_y < depth_buffer[x])
-                        for (int y = draw_start_y; y < draw_end_y; y++)
+                        for (int y = draw_start_y; y <= draw_end_y; y++)
                         {
                             // y coordinate on the sprite
-                            int sprite_y = (((y * 256 - SCREEN_HEIGHT * 128 + object_height * 128) * sprite->h) / object_height) / 256;
+                            int sprite_y = ((((y - move_v) * 256 - SCREEN_HEIGHT * 128 + object_height * 128) * sprite->h) / object_height) / 256;
 
                             // get current color on the sprite
                             unsigned int color = get_pixel(sprite, sprite_x, sprite_y);
@@ -835,6 +898,9 @@ int main(int argc, char *args[])
                             // draw the pixel if it isnt't black, black is the invisible color
                             if ((color & 0x00FFFFFF) != 0)
                             {
+                                // used for translucency
+                                unsigned int previous_color = buffer[y][x];
+
                                 buffer[y][x] = color;
                             }
                         }
@@ -842,7 +908,9 @@ int main(int argc, char *args[])
             }
         }
 
-        SDL_Surface *text_surface = TTF_RenderText_Solid(font, "Hello, World!", (SDL_Color){255, 255, 255, 255});
+        char text_buffer[256];
+        sprintf(text_buffer, "%s", "Hello, World!");
+        SDL_Surface *text_surface = TTF_RenderText_Solid(font, text_buffer, (SDL_Color){255, 255, 255, 255});
         SDL_Texture *text = SDL_CreateTextureFromSurface(renderer, text_surface);
         SDL_Rect text_rect;
         text_rect.x = 0;
@@ -862,12 +930,14 @@ int main(int argc, char *args[])
         SDL_RenderPresent(renderer);
     }
 
-    // cleanup
+    // unload font
     TTF_CloseFont(font);
-    TTF_Quit();
 
-    SDLNet_Quit();
+    // unload sounds
+    Mix_FreeMusic(music);
+    Mix_FreeChunk(shoot);
 
+    // unload images
     for (int i = 0; i < 3; i++)
     {
         SDL_Surface *sprite = sprites[i];
@@ -878,11 +948,17 @@ int main(int argc, char *args[])
         SDL_Surface *screen = textures[i];
         SDL_FreeSurface(screen);
     }
-    IMG_Quit();
 
-    SDL_DestroyTexture(screen);
-    SDL_DestroyRenderer(renderer);
+    // destroy window
     SDL_DestroyWindow(window);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyTexture(screen);
+
+    // quit SDL
+    TTF_Quit();
+    SDLNet_Quit();
+    Mix_CloseAudio();
+    IMG_Quit();
     SDL_Quit();
 
     return 0;
