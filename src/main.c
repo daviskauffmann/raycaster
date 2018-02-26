@@ -1,3 +1,4 @@
+#include <float.h>
 #include <math.h>
 #include <SDL\SDL.h>
 #include <SDL\SDL_image.h>
@@ -11,7 +12,7 @@
 
 #define TITLE "Raycaster"
 #define SCREEN_WIDTH 640
-#define SCREEN_HEIGHT 360
+#define SCREEN_HEIGHT 400
 
 #define MAP_WIDTH 24
 #define MAP_HEIGHT 24
@@ -177,15 +178,12 @@ bool d_down = false;
 bool lshift_down = false;
 
 /* Rendering */
-unsigned int buffer[SCREEN_HEIGHT][SCREEN_WIDTH];
-double depth_buffer[SCREEN_WIDTH];
+unsigned int pixel_buffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+double depth_buffer[SCREEN_HEIGHT][SCREEN_WIDTH];
 bool textured = true;
 bool draw_walls = true;
 bool draw_floor = true;
 bool draw_objects = true;
-
-/* Engine */
-bool quit = false;
 
 int main(int argc, char *args[])
 {
@@ -241,6 +239,7 @@ int main(int argc, char *args[])
 
     SDL_SetRelativeMouseMode(SDL_TRUE);
 
+    bool quit = false;
     while (!quit)
     {
         // timing for input and FPS counter
@@ -514,6 +513,13 @@ int main(int argc, char *args[])
         // raycasting
         for (int x = 0; x < SCREEN_WIDTH; x++)
         {
+            // clear the pixel and depth buffers
+            for (int y = 0; y < SCREEN_HEIGHT; y++)
+            {
+                pixel_buffer[y][x] = 0;
+                depth_buffer[y][x] = DBL_MAX;
+            }
+
             // calculate x-coordinate in camera space
             double camera_x = (2 * (double)x / (double)SCREEN_WIDTH) - 1.0;
 
@@ -588,7 +594,7 @@ int main(int argc, char *args[])
 
             // calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
             // additionaly set the depth buffer at this slice to the distance
-            double perp_wall_dist = depth_buffer[x] =
+            double perp_wall_dist =
                 side == 0
                     ? (map_x - pos_x + (1 - step_x) / 2) / ray_dir_x
                     : (map_y - pos_y + (1 - step_y) / 2) / ray_dir_y;
@@ -653,7 +659,8 @@ int main(int argc, char *args[])
                             texture_pixel = (texture_pixel >> 1) & 0x7f7f7f;
                         }
 
-                        buffer[y][x] = texture_pixel;
+                        pixel_buffer[y][x] = texture_pixel;
+                        depth_buffer[y][x] = perp_wall_dist;
                     }
                 }
 
@@ -716,7 +723,8 @@ int main(int argc, char *args[])
                             unsigned int texture_pixel = get_pixel(texture, texture_x, texture_y);
 
                             // draw the pixel
-                            buffer[y][x] = texture_pixel;
+                            pixel_buffer[y][x] = texture_pixel;
+                            depth_buffer[y][x] = current_dist;
                         }
 
                         // ceiling
@@ -735,7 +743,8 @@ int main(int argc, char *args[])
                             unsigned int texture_pixel = get_pixel(texture, texture_x, texture_y);
 
                             // draw the pixel slightly darkened
-                            buffer[SCREEN_HEIGHT - y - 1][x] = (texture_pixel >> 1) & 0x7f7f7f;
+                            pixel_buffer[SCREEN_HEIGHT - y][x] = (texture_pixel >> 1) & 0x7f7f7f;
+                            depth_buffer[SCREEN_HEIGHT - y][x] = current_dist;
                         }
                     }
                 }
@@ -774,7 +783,8 @@ int main(int argc, char *args[])
                     // draw the pixels of the stripe as a vertical line
                     for (int y = draw_start; y <= draw_end; y++)
                     {
-                        buffer[y][x] = wall_color;
+                        pixel_buffer[y][x] = wall_color;
+                        depth_buffer[y][x] = perp_wall_dist;
                     }
                 }
 
@@ -787,13 +797,15 @@ int main(int argc, char *args[])
                     // draw the floor
                     for (int y = draw_end + 1; y < SCREEN_HEIGHT; y++)
                     {
-                        buffer[y][x] = floor_color;
+                        pixel_buffer[y][x] = floor_color;
+                        depth_buffer[y][x] = perp_wall_dist;
                     }
 
                     // draw the ceiling
                     for (int y = 0; y < draw_start; y++)
                     {
-                        buffer[y][x] = ceiling_color;
+                        pixel_buffer[y][x] = ceiling_color;
+                        depth_buffer[y][x] = perp_wall_dist;
                     }
                 }
             }
@@ -869,39 +881,43 @@ int main(int argc, char *args[])
                 }
 
                 // calculate angle of object to player
-                double angle = atan2(object.y - pos_y, object.x - pos_x);
+                double angle = atan2(object_y, object_y);
 
                 // choose the sprite
                 int sprite_index = object.sprite_index;
                 SDL_Surface *sprite = sprites[sprite_index];
 
                 // loop through every vertical stripe of the sprite on screen
-                for (int x = draw_start_x; x <= draw_end_x; x++)
+                for (int x = draw_start_x; x < draw_end_x; x++)
                 {
                     // x coordinate on the sprite
                     int sprite_x = (256 * (x - (-object_width / 2 + object_screen_x)) * sprite->w / object_width) / 256;
 
-                    //the conditions in the if are:
-                    //1) it's in front of camera plane so you don't see things behind you
-                    //2) it's on the screen (left)
-                    //3) it's on the screen (right)
-                    //4) depth_buffer, with perpendicular distance
-                    if (transform_y > 0 && x > 0 && x < SCREEN_WIDTH && transform_y < depth_buffer[x])
-                        for (int y = draw_start_y; y <= draw_end_y; y++)
+                    // the conditions in the if are:
+                    // 1) it's in front of camera plane so you don't see things behind you
+                    // 2) it's on the screen (left)
+                    // 3) it's on the screen (right)
+                    if (transform_y > 0 && x > 0 && x < SCREEN_WIDTH)
+                        for (int y = draw_start_y; y < draw_end_y; y++)
                         {
-                            // y coordinate on the sprite
-                            int sprite_y = ((((y - move_v) * 256 - SCREEN_HEIGHT * 128 + object_height * 128) * sprite->h) / object_height) / 256;
-
-                            // get current color on the sprite
-                            unsigned int color = get_pixel(sprite, sprite_x, sprite_y);
-
-                            // draw the pixel if it isnt't black, black is the invisible color
-                            if ((color & 0x00FFFFFF) != 0)
+                            // depth_buffer, with perpendicular distance
+                            if (transform_y < depth_buffer[y][x])
                             {
-                                // used for translucency
-                                unsigned int previous_color = buffer[y][x];
+                                // y coordinate on the sprite
+                                int sprite_y = ((((y - move_v) * 256 - SCREEN_HEIGHT * 128 + object_height * 128) * sprite->h) / object_height) / 256;
 
-                                buffer[y][x] = color;
+                                // get current color on the sprite
+                                unsigned int color = get_pixel(sprite, sprite_x, sprite_y);
+
+                                // draw the pixel if it isnt't black, black is the invisible color
+                                if ((color & 0x00FFFFFF) != 0)
+                                {
+                                    // used for translucency
+                                    unsigned int previous_color = pixel_buffer[y][x];
+
+                                    pixel_buffer[y][x] = color;
+                                    depth_buffer[y][x] = transform_y;
+                                }
                             }
                         }
                 }
@@ -912,18 +928,16 @@ int main(int argc, char *args[])
         sprintf(text_buffer, "FPS: %d", (int)(1 / delta_time));
         SDL_Surface *text_surface = TTF_RenderText_Solid(font, text_buffer, (SDL_Color){255, 255, 255, 255});
         SDL_Texture *text = SDL_CreateTextureFromSurface(renderer, text_surface);
-        SDL_Rect text_rect;
-        text_rect.x = 0;
-        text_rect.y = 0;
-        text_rect.w = SCREEN_WIDTH / 5;
-        text_rect.h = SCREEN_HEIGHT / 6;
+        SDL_Rect text_rect = {0, 0, 100, 50};
 
         // update the screen
         SDL_UpdateTexture(
             screen,
             NULL,
-            buffer,
+            pixel_buffer,
             SCREEN_WIDTH * sizeof(unsigned int));
+
+        // render
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, screen, NULL, NULL);
         SDL_RenderCopy(renderer, text, NULL, &text_rect);
@@ -945,8 +959,8 @@ int main(int argc, char *args[])
     }
     for (int i = 0; i < 8; i++)
     {
-        SDL_Surface *screen = textures[i];
-        SDL_FreeSurface(screen);
+        SDL_Surface *texture = textures[i];
+        SDL_FreeSurface(texture);
     }
 
     // destroy window
