@@ -50,8 +50,8 @@ typedef struct object_s
 unsigned int get_pixel(SDL_Surface *surface, int x, int y);
 void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
 void comb_sort(int *order, double *dist, int amount);
-void darken(unsigned int *p_color);
-void apply_fog(unsigned int *p_color, double distance);
+unsigned int color_darken(unsigned int color);
+unsigned int color_fog(unsigned int color, double distance);
 
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
@@ -65,7 +65,7 @@ Mix_Chunk *shoot = NULL;
 
 TTF_Font *font = NULL;
 
-char wall_map[MAP_WIDTH][MAP_HEIGHT] = {
+int wall_map[MAP_WIDTH][MAP_HEIGHT] = {
     {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
     {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
     {8, 0, 3, 3, 0, 0, 0, 0, 0, 8, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6},
@@ -91,7 +91,7 @@ char wall_map[MAP_WIDTH][MAP_HEIGHT] = {
     {2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 2, 2, 0, 5, 0, 5, 0, 0, 0, 5, 5},
     {2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5}};
 
-char floor_map[MAP_WIDTH][MAP_HEIGHT] = {
+int floor_map[MAP_WIDTH][MAP_HEIGHT] = {
     {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
     {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
     {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
@@ -117,7 +117,7 @@ char floor_map[MAP_WIDTH][MAP_HEIGHT] = {
     {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
     {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}};
 
-char ceiling_map[MAP_WIDTH][MAP_HEIGHT] = {
+int ceiling_map[MAP_WIDTH][MAP_HEIGHT] = {
     {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
     {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
     {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
@@ -732,12 +732,12 @@ int main(int argc, char *args[])
                         // make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
                         if (shading && side == 1)
                         {
-                            darken(&color);
+                            color = color_darken(color);
                         }
 
                         if (foggy)
                         {
-                            apply_fog(&color, perp_wall_dist);
+                            color = color_fog(color, perp_wall_dist);
                         }
 
                         // draw the pixel
@@ -803,7 +803,7 @@ int main(int argc, char *args[])
 
                             if (foggy)
                             {
-                                apply_fog(&color, current_dist);
+                                color = color_fog(color, current_dist);
                             }
 
                             // draw the pixel
@@ -825,12 +825,12 @@ int main(int argc, char *args[])
 
                             if (foggy)
                             {
-                                apply_fog(&color, current_dist);
+                                color = color_fog(color, current_dist);
                             }
 
                             if (shading)
                             {
-                                darken(&color);
+                                color = color_darken(color);
                             }
 
                             // draw the pixel
@@ -874,12 +874,12 @@ int main(int argc, char *args[])
                     // give x and y sides different brightness
                     if (shading && side == 1)
                     {
-                        darken(&color);
+                        color = color_darken(color);
                     }
 
                     if (foggy)
                     {
-                        apply_fog(&color, perp_wall_dist);
+                        color = color_fog(color, perp_wall_dist);
                     }
 
                     // draw the pixels of the stripe as a vertical line
@@ -898,7 +898,7 @@ int main(int argc, char *args[])
 
                     if (shading)
                     {
-                        darken(&ceiling_color);
+                        ceiling_color = color_darken(ceiling_color);
                     }
 
                     // draw the floor
@@ -1018,7 +1018,7 @@ int main(int argc, char *args[])
 
                                 if (foggy)
                                 {
-                                    apply_fog(&color, transform_y);
+                                    color = color_fog(color, transform_y);
                                 }
 
                                 // draw the pixel if it isnt't black, black is the invisible color
@@ -1191,22 +1191,16 @@ void comb_sort(int *order, double *dist, int amount)
     }
 }
 
-void darken(unsigned int *p_color)
+unsigned int color_darken(unsigned int color)
 {
-    int color = *p_color;
-
     // darken the color
-    color = (color >> 1) & 0x7f7f7f;
-
-    *p_color = color;
+    return (color >> 1) & 0x7f7f7f;
 }
 
 // TODO: optimize
 // this drops the framerate by about 20
-void apply_fog(unsigned int *p_color, double distance)
+unsigned int color_fog(unsigned int color, double distance)
 {
-    int color = *p_color;
-
     // separate the colors
     int red = (color >> 16) & 0x0FF;
     int green = (color >> 8) & 0x0FF;
@@ -1230,7 +1224,5 @@ void apply_fog(unsigned int *p_color, double distance)
     }
 
     // recombine the colors
-    color = ((red & 0x0ff) << 16) | ((green & 0x0ff) << 8) | (blue & 0x0ff);
-
-    *p_color = color;
+    return ((red & 0x0ff) << 16) | ((green & 0x0ff) << 8) | (blue & 0x0ff);
 }
