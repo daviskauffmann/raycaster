@@ -293,6 +293,7 @@ int main(int argc, char *args[])
         SDL_FreeSurface(surface);
     }
 
+    Mix_Init(MIX_INIT_MP3);
     Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 4096);
     music = Mix_LoadMUS("music.mp3");
     shoot = Mix_LoadWAV("shoot.wav");
@@ -956,7 +957,7 @@ int main(int argc, char *args[])
                 int object_screen_x = (int)((SCREEN_WIDTH / 2) * (1 + transform_x / transform_y));
 
                 // calculate width and height of the object on screen
-                // using "transform_y" instead of the real distance prevents fisheye
+                // using transform_y instead of the real distance prevents fisheye
                 int object_width = abs((int)(SCREEN_HEIGHT / (transform_y))) * SPRITE_SCALE_U;
                 int object_height = abs((int)(SCREEN_HEIGHT / (transform_y))) * SPRITE_SCALE_V;
 
@@ -1065,6 +1066,7 @@ int main(int argc, char *args[])
     Mix_FreeMusic(music);
     Mix_FreeChunk(shoot);
     Mix_CloseAudio();
+    Mix_Quit();
 
     IMG_Quit();
 
