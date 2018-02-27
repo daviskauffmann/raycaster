@@ -14,6 +14,14 @@
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 400
 
+#define NUM_TEXTURES 8
+#define TEXTURE_WIDTH 64
+#define TEXTURE_HEIGHT 64
+
+#define NUM_SPRITES 3
+#define SPRITE_WIDTH 64
+#define SPRITE_HEIGHT 64
+
 #define MAP_WIDTH 24
 #define MAP_HEIGHT 24
 
@@ -30,6 +38,8 @@
 #define SPRITE_SCALE_V 1
 #define SPRITE_MOVE_V 0.0
 
+#define FOG_STRENGTH 0.5
+
 typedef struct object_s
 {
     double x;
@@ -40,24 +50,21 @@ typedef struct object_s
 unsigned int get_pixel(SDL_Surface *surface, int x, int y);
 void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
 void comb_sort(int *order, double *dist, int amount);
+void darken(unsigned int *p_color);
+void apply_fog(unsigned int *p_color, double distance);
 
-/* SDL */
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *screen = NULL;
 
-/* SDL_image */
-SDL_Surface *textures[8];
-SDL_Surface *sprites[3];
+unsigned int textures[NUM_TEXTURES][TEXTURE_WIDTH][TEXTURE_HEIGHT];
+unsigned int sprites[NUM_SPRITES][SPRITE_WIDTH][SPRITE_HEIGHT];
 
-/* SDL_mixer */
 Mix_Music *music = NULL;
 Mix_Chunk *shoot = NULL;
 
-/* SDL_ttf */
 TTF_Font *font = NULL;
 
-/* Map */
 char wall_map[MAP_WIDTH][MAP_HEIGHT] = {
     {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
     {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
@@ -158,7 +165,6 @@ object_t objects[NUM_OBJECTS] = {
     {10.5, 15.8, 0},
 };
 
-/* Player */
 double pos_x = 22.0; // start position
 double pos_y = 11.5;
 double dir_x = -1.0; // direction vector
@@ -166,24 +172,24 @@ double dir_y = 0.0;
 double plane_x = 0.0; // camera plane
 double plane_y = 1.0;
 
-/* Timing */
 unsigned int previous_time = 0;
 unsigned int current_time = 0;
 
-/* Input */
 bool w_down = false;
 bool a_down = false;
 bool s_down = false;
 bool d_down = false;
 bool lshift_down = false;
 
-/* Rendering */
 unsigned int pixel_buffer[SCREEN_HEIGHT][SCREEN_WIDTH];
 double depth_buffer[SCREEN_HEIGHT][SCREEN_WIDTH];
+
 bool textured = true;
 bool draw_walls = true;
 bool draw_floor = true;
 bool draw_objects = true;
+bool shading = true;
+bool foggy = true;
 
 int main(int argc, char *args[])
 {
@@ -191,61 +197,113 @@ int main(int argc, char *args[])
     (void)argc;
     (void)args;
 
-    // init SDL
     SDL_Init(SDL_INIT_EVERYTHING);
-    IMG_Init(IMG_INIT_PNG);
-    SDLNet_Init();
-    Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 4096);
-    TTF_Init();
+    SDL_SetRelativeMouseMode(SDL_TRUE);
 
-    // create window
     window = SDL_CreateWindow(
         TITLE,
         SDL_WINDOWPOS_UNDEFINED,
         SDL_WINDOWPOS_UNDEFINED,
         SCREEN_WIDTH,
         SCREEN_HEIGHT,
-        SDL_WINDOW_SHOWN);
+        0);
 
-    // setup renderer
     renderer = SDL_CreateRenderer(
         window,
         -1,
-        SDL_RENDERER_ACCELERATED);
+        0);
 
-    // setup screen
     screen = SDL_CreateTexture(
         renderer,
         SDL_PIXELFORMAT_ABGR8888,
-        SDL_TEXTUREACCESS_STATIC,
+        SDL_TEXTUREACCESS_STREAMING,
         SCREEN_WIDTH,
         SCREEN_HEIGHT);
 
-    // load textures
-    textures[0] = IMG_Load("eagle.png");
-    textures[1] = IMG_Load("redbrick.png");
-    textures[2] = IMG_Load("purplestone.png");
-    textures[3] = IMG_Load("greystone.png");
-    textures[4] = IMG_Load("bluestone.png");
-    textures[5] = IMG_Load("mossy.png");
-    textures[6] = IMG_Load("wood.png");
-    textures[7] = IMG_Load("colorstone.png");
+    IMG_Init(IMG_INIT_PNG);
 
-    // load sprites
-    sprites[0] = IMG_Load("barrel.png");
-    sprites[1] = IMG_Load("pillar.png");
-    sprites[2] = IMG_Load("greenlight.png");
+    for (int i = 0; i < NUM_TEXTURES; i++)
+    {
+        SDL_Surface *surface = NULL;
 
-    // load sounds
+        switch (i)
+        {
+        case 0:
+            surface = IMG_Load("eagle.png");
+            break;
+        case 1:
+            surface = IMG_Load("redbrick.png");
+            break;
+        case 2:
+            surface = IMG_Load("purplestone.png");
+            break;
+        case 3:
+            surface = IMG_Load("greystone.png");
+            break;
+        case 4:
+            surface = IMG_Load("bluestone.png");
+            break;
+        case 5:
+            surface = IMG_Load("mossy.png");
+            break;
+        case 6:
+            surface = IMG_Load("wood.png");
+            break;
+        case 7:
+            surface = IMG_Load("colorstone.png");
+            break;
+        }
+
+        for (int x = 0; x < TEXTURE_WIDTH; x++)
+        {
+            for (int y = 0; y < TEXTURE_HEIGHT; y++)
+            {
+                textures[i][x][y] = get_pixel(surface, x, y);
+            }
+        }
+
+        SDL_FreeSurface(surface);
+    }
+
+    for (int i = 0; i < NUM_SPRITES; i++)
+    {
+        SDL_Surface *surface = NULL;
+
+        switch (i)
+        {
+        case 0:
+            surface = IMG_Load("barrel.png");
+            break;
+        case 1:
+            surface = IMG_Load("pillar.png");
+            break;
+        case 2:
+            surface = IMG_Load("greenlight.png");
+            break;
+        }
+
+        for (int x = 0; x < SPRITE_WIDTH; x++)
+        {
+            for (int y = 0; y < SPRITE_HEIGHT; y++)
+            {
+                sprites[i][x][y] = get_pixel(surface, x, y);
+            }
+        }
+
+        SDL_FreeSurface(surface);
+    }
+
+    Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 4096);
     music = Mix_LoadMUS("music.mp3");
     shoot = Mix_LoadWAV("shoot.wav");
 
+    SDLNet_Init();
+
     // load font
+    TTF_Init();
     font = TTF_OpenFont("VeraMono.ttf", 24);
 
     // printf("FOV: %f\n", 2 * atan(plane_y) / M_PI * 180.0);
-
-    SDL_SetRelativeMouseMode(SDL_TRUE);
 
     bool quit = false;
     while (!quit)
@@ -279,8 +337,9 @@ int main(int argc, char *args[])
             break;
             case SDL_MOUSEMOTION:
             {
-                // the movement of the mouse in the x-direction
+                // the movement of the mouse in the x, y direction
                 int mouse_dx = event.motion.xrel;
+                // int mouse_dy = event.motion.yrel;
 
                 // calculate rotation vector
                 // the constant value is in radians/second
@@ -330,6 +389,73 @@ int main(int argc, char *args[])
                     lshift_down = true;
                 }
                 break;
+                case SDLK_F1:
+                {
+                    SDL_SetWindowFullscreen(window, 0);
+                }
+                break;
+                case SDLK_F2:
+                {
+                    SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+                }
+                break;
+                case SDLK_F3:
+                {
+                    textured = !textured;
+                }
+                break;
+                case SDLK_F4:
+                {
+                    draw_walls = !draw_walls;
+                }
+                break;
+                case SDLK_F5:
+                {
+                    draw_floor = !draw_floor;
+                }
+                break;
+                case SDLK_F6:
+                {
+                    draw_objects = !draw_objects;
+                }
+                break;
+                case SDLK_F7:
+                {
+                    shading = !shading;
+                }
+                break;
+                case SDLK_F8:
+                {
+                    foggy = !foggy;
+                }
+                break;
+                case SDLK_1:
+                {
+                    if (Mix_PlayingMusic())
+                    {
+                        Mix_HaltMusic();
+                    }
+                    else
+                    {
+                        Mix_PlayMusic(music, -1);
+                    }
+                }
+                break;
+                case SDLK_2:
+                {
+                    if (Mix_PlayingMusic())
+                    {
+                        if (Mix_PausedMusic())
+                        {
+                            Mix_ResumeMusic();
+                        }
+                        else
+                        {
+                            Mix_PauseMusic();
+                        }
+                    }
+                }
+                break;
                 case SDLK_ESCAPE:
                 {
                     quit = true;
@@ -368,63 +494,6 @@ int main(int argc, char *args[])
                 case SDLK_LSHIFT:
                 {
                     lshift_down = false;
-                }
-                break;
-                case SDLK_F1:
-                {
-                    SDL_SetWindowFullscreen(window, 0);
-                }
-                break;
-                case SDLK_F2:
-                {
-                    SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
-                }
-                break;
-                case SDLK_F3:
-                {
-                    textured = !textured;
-                }
-                break;
-                case SDLK_F4:
-                {
-                    draw_walls = !draw_walls;
-                }
-                break;
-                case SDLK_F5:
-                {
-                    draw_floor = !draw_floor;
-                }
-                break;
-                case SDLK_F6:
-                {
-                    draw_objects = !draw_objects;
-                }
-                break;
-                case SDLK_F7:
-                {
-                    if (Mix_PlayingMusic())
-                    {
-                        Mix_HaltMusic();
-                    }
-                    else
-                    {
-                        Mix_PlayMusic(music, -1);
-                    }
-                }
-                break;
-                case SDLK_F8:
-                {
-                    if (Mix_PlayingMusic())
-                    {
-                        if (Mix_PausedMusic())
-                        {
-                            Mix_ResumeMusic();
-                        }
-                        else
-                        {
-                            Mix_PauseMusic();
-                        }
-                    }
                 }
                 break;
                 }
@@ -640,35 +709,39 @@ int main(int argc, char *args[])
                 {
                     // choose a texture
                     int texture_index = wall_map[map_x][map_y] - 1;
-                    SDL_Surface *texture = textures[texture_index];
 
                     // x coordinate on the texture
-                    int texture_x = (int)(wall_x * (double)texture->w);
+                    int texture_x = (int)(wall_x * (double)TEXTURE_WIDTH);
                     if (side == 0 && ray_dir_x > 0)
                     {
-                        texture_x = texture->w - texture_x - 1;
+                        texture_x = TEXTURE_WIDTH - texture_x - 1;
                     }
                     if (side == 1 && ray_dir_y < 0)
                     {
-                        texture_x = texture->w - texture_x - 1;
+                        texture_x = TEXTURE_WIDTH - texture_x - 1;
                     }
 
                     for (int y = draw_start; y <= draw_end; y++)
                     {
                         // y coordinate on the texture
-                        int texture_y = (((y * 256 - SCREEN_HEIGHT * 128 + line_height * 128) * texture->h) / line_height) / 256;
+                        int texture_y = (((y * 256 - SCREEN_HEIGHT * 128 + line_height * 128) * TEXTURE_HEIGHT) / line_height) / 256;
 
                         // get the color on the texture
-                        unsigned int texture_pixel = get_pixel(texture, texture_x, texture_y);
+                        unsigned int color = textures[texture_index][texture_x][texture_y];
 
                         // make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
-                        if (side == 1)
+                        if (shading && side == 1)
                         {
-                            texture_pixel = (texture_pixel >> 1) & 0x7f7f7f;
+                            darken(&color);
+                        }
+
+                        if (foggy)
+                        {
+                            apply_fog(&color, perp_wall_dist);
                         }
 
                         // draw the pixel
-                        pixel_buffer[y][x] = texture_pixel;
+                        pixel_buffer[y][x] = color;
                         depth_buffer[y][x] = perp_wall_dist;
                     }
                 }
@@ -720,19 +793,21 @@ int main(int argc, char *args[])
                         {
                             // choose a texture
                             int texture_index = floor_map[(int)current_x][(int)current_y];
-                            SDL_Surface *texture = textures[texture_index];
 
                             // x, y coordinate of the texture
-                            int texture_x;
-                            int texture_y;
-                            texture_x = (int)(current_x * texture->w / FLOOR_TEXTURE_MULT) % texture->w;
-                            texture_y = (int)(current_y * texture->h / FLOOR_TEXTURE_MULT) % texture->h;
+                            int texture_x = (int)(current_x * TEXTURE_WIDTH / FLOOR_TEXTURE_MULT) % TEXTURE_WIDTH;
+                            int texture_y = (int)(current_y * TEXTURE_HEIGHT / FLOOR_TEXTURE_MULT) % TEXTURE_HEIGHT;
 
                             // get the color on the texture
-                            unsigned int texture_pixel = get_pixel(texture, texture_x, texture_y);
+                            unsigned int color = textures[texture_index][texture_x][texture_y];
+
+                            if (foggy)
+                            {
+                                apply_fog(&color, current_dist);
+                            }
 
                             // draw the pixel
-                            pixel_buffer[y][x] = texture_pixel;
+                            pixel_buffer[y][x] = color;
                             depth_buffer[y][x] = current_dist;
                         }
 
@@ -740,19 +815,26 @@ int main(int argc, char *args[])
                         {
                             // choose a texture
                             int texture_index = ceiling_map[(int)current_x][(int)current_y];
-                            SDL_Surface *texture = textures[texture_index];
 
                             // x, y coordinate of the texture
-                            int texture_x;
-                            int texture_y;
-                            texture_x = (int)(current_x * texture->w / CEILING_TEXTURE_MULT) % texture->w;
-                            texture_y = (int)(current_y * texture->h / CEILING_TEXTURE_MULT) % texture->h;
+                            int texture_x = (int)(current_x * TEXTURE_WIDTH / CEILING_TEXTURE_MULT) % TEXTURE_WIDTH;
+                            int texture_y = (int)(current_y * TEXTURE_HEIGHT / CEILING_TEXTURE_MULT) % TEXTURE_HEIGHT;
 
                             // get the color on the texture
-                            unsigned int texture_pixel = get_pixel(texture, texture_x, texture_y);
+                            unsigned int color = textures[texture_index][texture_x][texture_y];
 
-                            // draw the pixel slightly darkened
-                            pixel_buffer[SCREEN_HEIGHT - y][x] = (texture_pixel >> 1) & 0x7f7f7f;
+                            if (foggy)
+                            {
+                                apply_fog(&color, current_dist);
+                            }
+
+                            if (shading)
+                            {
+                                darken(&color);
+                            }
+
+                            // draw the pixel
+                            pixel_buffer[SCREEN_HEIGHT - y][x] = color;
                             depth_buffer[SCREEN_HEIGHT - y][x] = current_dist;
                         }
                     }
@@ -763,42 +845,47 @@ int main(int argc, char *args[])
                 if (draw_walls)
                 {
                     // choose wall color
-                    unsigned int wall_color;
+                    unsigned int color;
                     switch (wall_map[map_x][map_y])
                     {
                     case 0:
-                        wall_color = 0xff00ffff; // yellow
+                        color = 0xff00ffff; // yellow
                         break;
                     case 1:
-                        wall_color = 0xff0000ff; // red
+                        color = 0xff0000ff; // red
                         break;
                     case 2:
-                        wall_color = 0xff00ff00; // green
+                        color = 0xff00ff00; // green
                         break;
                     case 3:
-                        wall_color = 0xffff0000; // blue
+                        color = 0xffff0000; // blue
                         break;
                     case 4:
-                        wall_color = 0xffff00ff; // purple
+                        color = 0xffff00ff; // purple
                         break;
                     case 5:
-                        wall_color = 0xffffff00; // yellow
+                        color = 0xffffff00; // yellow
                         break;
                     default:
-                        wall_color = 0xffffffff; // white
+                        color = 0xffffffff; // white
                         break;
                     }
 
                     // give x and y sides different brightness
-                    if (side == 1)
+                    if (shading && side == 1)
                     {
-                        wall_color = (wall_color >> 1) & 0x7f7f7f;
+                        darken(&color);
+                    }
+
+                    if (foggy)
+                    {
+                        apply_fog(&color, perp_wall_dist);
                     }
 
                     // draw the pixels of the stripe as a vertical line
                     for (int y = draw_start; y <= draw_end; y++)
                     {
-                        pixel_buffer[y][x] = wall_color;
+                        pixel_buffer[y][x] = color;
                         depth_buffer[y][x] = perp_wall_dist;
                     }
                 }
@@ -807,7 +894,12 @@ int main(int argc, char *args[])
                 {
                     // choose floor and ceiling colors
                     unsigned int floor_color = 0xff646464;
-                    unsigned int ceiling_color = (floor_color >> 1) & 0x7f7f7f;
+                    unsigned int ceiling_color = floor_color;
+
+                    if (shading)
+                    {
+                        darken(&ceiling_color);
+                    }
 
                     // draw the floor
                     for (int y = draw_end + 1; y < SCREEN_HEIGHT; y++)
@@ -900,13 +992,12 @@ int main(int argc, char *args[])
 
                 // choose the sprite
                 int sprite_index = object.sprite_index;
-                SDL_Surface *sprite = sprites[sprite_index];
 
                 // loop through every vertical stripe of the sprite on screen
                 for (int x = draw_start_x; x < draw_end_x; x++)
                 {
                     // x coordinate on the sprite
-                    int sprite_x = (256 * (x - (-object_width / 2 + object_screen_x)) * sprite->w / object_width) / 256;
+                    int sprite_x = (256 * (x - (-object_width / 2 + object_screen_x)) * SPRITE_WIDTH / object_width) / 256;
 
                     // the conditions in the if are:
                     // 1) it's in front of camera plane so you don't see things behind you
@@ -920,13 +1011,18 @@ int main(int argc, char *args[])
                             if (transform_y < depth_buffer[y][x])
                             {
                                 // y coordinate on the sprite
-                                int sprite_y = ((((y - move_v) * 256 - SCREEN_HEIGHT * 128 + object_height * 128) * sprite->h) / object_height) / 256;
+                                int sprite_y = ((((y - move_v) * 256 - SCREEN_HEIGHT * 128 + object_height * 128) * SPRITE_HEIGHT) / object_height) / 256;
 
                                 // get current color on the sprite
-                                unsigned int color = get_pixel(sprite, sprite_x, sprite_y);
+                                unsigned int color = sprites[sprite_index][sprite_x][sprite_y];
+
+                                if (foggy)
+                                {
+                                    apply_fog(&color, transform_y);
+                                }
 
                                 // draw the pixel if it isnt't black, black is the invisible color
-                                if ((color & 0x00FFFFFF) != 0)
+                                if ((color & 0x00ffffff) != 0)
                                 {
                                     // used for translucency
                                     // unsigned int previous_color = pixel_buffer[y][x];
@@ -961,35 +1057,21 @@ int main(int argc, char *args[])
         SDL_RenderPresent(renderer);
     }
 
-    // unload font
     TTF_CloseFont(font);
+    TTF_Quit();
 
-    // unload sounds
+    SDLNet_Quit();
+
     Mix_FreeMusic(music);
     Mix_FreeChunk(shoot);
-
-    // unload images
-    for (int i = 0; i < 3; i++)
-    {
-        SDL_Surface *sprite = sprites[i];
-        SDL_FreeSurface(sprite);
-    }
-    for (int i = 0; i < 8; i++)
-    {
-        SDL_Surface *texture = textures[i];
-        SDL_FreeSurface(texture);
-    }
-
-    // destroy window
-    SDL_DestroyWindow(window);
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyTexture(screen);
-
-    // quit SDL
-    TTF_Quit();
-    SDLNet_Quit();
     Mix_CloseAudio();
+
     IMG_Quit();
+
+    SDL_DestroyTexture(screen);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+
     SDL_Quit();
 
     return 0;
@@ -997,11 +1079,6 @@ int main(int argc, char *args[])
 
 unsigned int get_pixel(SDL_Surface *surface, int x, int y)
 {
-    if (x < 0 || x >= surface->w || y < 0 || y >= surface->h)
-    {
-        return 0;
-    }
-
     int bpp = surface->format->BytesPerPixel;
     unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
 
@@ -1041,11 +1118,6 @@ unsigned int get_pixel(SDL_Surface *surface, int x, int y)
 
 void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
 {
-    if (x < 0 || x >= surface->w || y < 0 || y >= surface->h)
-    {
-        return;
-    }
-
     int bpp = surface->format->BytesPerPixel;
     unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
 
@@ -1117,4 +1189,48 @@ void comb_sort(int *order, double *dist, int amount)
             }
         }
     }
+}
+
+void darken(unsigned int *p_color)
+{
+    int color = *p_color;
+
+    // darken the color
+    color = (color >> 1) & 0x7f7f7f;
+
+    *p_color = color;
+}
+
+// TODO: optimize
+// this drops the framerate by about 20
+void apply_fog(unsigned int *p_color, double distance)
+{
+    int color = *p_color;
+
+    // separate the colors
+    int red = (color >> 16) & 0x0FF;
+    int green = (color >> 8) & 0x0FF;
+    int blue = color & 0x0FF;
+
+    // modify the colors
+    double fog_intensity = distance * FOG_STRENGTH;
+    if (fog_intensity > 1)
+    {
+        double float_red = (double)red;
+        double float_green = (double)green;
+        double float_blue = (double)blue;
+
+        float_red /= fog_intensity;
+        float_green /= fog_intensity;
+        float_blue /= fog_intensity;
+
+        red = (int)float_red;
+        green = (int)float_green;
+        blue = (int)float_blue;
+    }
+
+    // recombine the colors
+    color = ((red & 0x0ff) << 16) | ((green & 0x0ff) << 8) | (blue & 0x0ff);
+
+    *p_color = color;
 }
