@@ -1,10 +1,10 @@
 #include <float.h>
 #include <math.h>
-#include <SDL\SDL.h>
 #include <SDL\SDL_image.h>
 #include <SDL\SDL_net.h>
 #include <SDL\SDL_mixer.h>
 #include <SDL\SDL_ttf.h>
+#include <SDL\SDL.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -187,6 +187,10 @@ bool draw_objects = true;
 
 int main(int argc, char *args[])
 {
+    // suppress warning C4100
+    (void)argc;
+    (void)args;
+
     // init SDL
     SDL_Init(SDL_INIT_EVERYTHING);
     IMG_Init(IMG_INIT_PNG);
@@ -202,10 +206,14 @@ int main(int argc, char *args[])
         SCREEN_WIDTH,
         SCREEN_HEIGHT,
         SDL_WINDOW_SHOWN);
+
+    // setup renderer
     renderer = SDL_CreateRenderer(
         window,
-        0,
-        0);
+        -1,
+        SDL_RENDERER_ACCELERATED);
+
+    // setup screen
     screen = SDL_CreateTexture(
         renderer,
         SDL_PIXELFORMAT_ABGR8888,
@@ -293,7 +301,7 @@ int main(int argc, char *args[])
             case SDL_KEYDOWN:
             {
                 SDL_Keycode key = event.key.keysym.sym;
-                SDL_Keymod mod = event.key.keysym.mod;
+                // SDL_Keymod mod = event.key.keysym.mod;
 
                 switch (key)
                 {
@@ -333,7 +341,7 @@ int main(int argc, char *args[])
             case SDL_KEYUP:
             {
                 SDL_Keycode key = event.key.keysym.sym;
-                SDL_Keymod mod = event.key.keysym.mod;
+                // SDL_Keymod mod = event.key.keysym.mod;
 
                 switch (key)
                 {
@@ -659,6 +667,7 @@ int main(int argc, char *args[])
                             texture_pixel = (texture_pixel >> 1) & 0x7f7f7f;
                         }
 
+                        // draw the pixel
                         pixel_buffer[y][x] = texture_pixel;
                         depth_buffer[y][x] = perp_wall_dist;
                     }
@@ -757,6 +766,9 @@ int main(int argc, char *args[])
                     unsigned int wall_color;
                     switch (wall_map[map_x][map_y])
                     {
+                    case 0:
+                        wall_color = 0xff00ffff; // yellow
+                        break;
                     case 1:
                         wall_color = 0xff0000ff; // red
                         break;
@@ -767,10 +779,13 @@ int main(int argc, char *args[])
                         wall_color = 0xffff0000; // blue
                         break;
                     case 4:
-                        wall_color = 0xffffffff; // white
+                        wall_color = 0xffff00ff; // purple
+                        break;
+                    case 5:
+                        wall_color = 0xffffff00; // yellow
                         break;
                     default:
-                        wall_color = 0xff00ffff; // yellow
+                        wall_color = 0xffffffff; // white
                         break;
                     }
 
@@ -881,7 +896,7 @@ int main(int argc, char *args[])
                 }
 
                 // calculate angle of object to player
-                double angle = atan2(object_y, object_y);
+                // double angle = atan2(object_y, object_y);
 
                 // choose the sprite
                 int sprite_index = object.sprite_index;
@@ -898,6 +913,7 @@ int main(int argc, char *args[])
                     // 2) it's on the screen (left)
                     // 3) it's on the screen (right)
                     if (transform_y > 0 && x > 0 && x < SCREEN_WIDTH)
+                    {
                         for (int y = draw_start_y; y < draw_end_y; y++)
                         {
                             // depth_buffer, with perpendicular distance
@@ -913,19 +929,20 @@ int main(int argc, char *args[])
                                 if ((color & 0x00FFFFFF) != 0)
                                 {
                                     // used for translucency
-                                    unsigned int previous_color = pixel_buffer[y][x];
+                                    // unsigned int previous_color = pixel_buffer[y][x];
 
                                     pixel_buffer[y][x] = color;
                                     depth_buffer[y][x] = transform_y;
                                 }
                             }
                         }
+                    }
                 }
             }
         }
 
         char text_buffer[256];
-        sprintf(text_buffer, "FPS: %d", (int)(1 / delta_time));
+        sprintf_s(text_buffer, sizeof(text_buffer), "FPS: %d", (int)(1 / delta_time));
         SDL_Surface *text_surface = TTF_RenderText_Solid(font, text_buffer, (SDL_Color){255, 255, 255, 255});
         SDL_Texture *text = SDL_CreateTextureFromSurface(renderer, text_surface);
         SDL_Rect text_rect = {0, 0, 100, 50};
@@ -980,7 +997,7 @@ int main(int argc, char *args[])
 
 unsigned int get_pixel(SDL_Surface *surface, int x, int y)
 {
-    if (x < 0 || x >= surface->w || y < 0 || y > surface->h)
+    if (x < 0 || x >= surface->w || y < 0 || y >= surface->h)
     {
         return 0;
     }
@@ -1002,14 +1019,11 @@ unsigned int get_pixel(SDL_Surface *surface, int x, int y)
     break;
     case 3:
     {
-        if (SDL_BYTEORDER == SDL_BIG_ENDIAN)
-        {
-            return p[0] << 16 | p[1] << 8 | p[2];
-        }
-        else
-        {
-            return p[0] | p[1] << 8 | p[2] << 16;
-        }
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+        return p[0] << 16 | p[1] << 8 | p[2];
+#else
+        return p[0] | p[1] << 8 | p[2] << 16;
+#endif
     }
     break;
     case 4:
@@ -1027,7 +1041,7 @@ unsigned int get_pixel(SDL_Surface *surface, int x, int y)
 
 void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
 {
-    if (x < 0 || x >= surface->w || y < 0 || y > surface->h)
+    if (x < 0 || x >= surface->w || y < 0 || y >= surface->h)
     {
         return;
     }
@@ -1039,28 +1053,25 @@ void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
     {
     case 1:
     {
-        *p = pixel;
+        *p = (unsigned char)pixel;
     }
     break;
     case 2:
     {
-        *(unsigned short *)p = pixel;
+        *(unsigned short *)p = (unsigned short)pixel;
     }
     break;
     case 3:
     {
-        if (SDL_BYTEORDER == SDL_BIG_ENDIAN)
-        {
-            p[0] = (pixel >> 16) & 0xff;
-            p[1] = (pixel >> 8) & 0xff;
-            p[2] = pixel & 0xff;
-        }
-        else
-        {
-            p[0] = pixel & 0xff;
-            p[1] = (pixel >> 8) & 0xff;
-            p[2] = (pixel >> 16) & 0xff;
-        }
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+        p[0] = (pixel >> 16) & 0xff;
+        p[1] = (pixel >> 8) & 0xff;
+        p[2] = pixel & 0xff;
+#else
+        p[0] = pixel & 0xff;
+        p[1] = (pixel >> 8) & 0xff;
+        p[2] = (pixel >> 16) & 0xff;
+#endif
     }
     break;
     case 4:
