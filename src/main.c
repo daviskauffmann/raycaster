@@ -14,13 +14,12 @@
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 400
 
-#define NUM_TEXTURES 8
-#define TEXTURE_WIDTH 64
-#define TEXTURE_HEIGHT 64
+#define NUM_IMAGES 11
+#define IMAGE_WIDTH 64
+#define IMAGE_HEIGHT 64
 
-#define NUM_SPRITES 3
-#define SPRITE_WIDTH 64
-#define SPRITE_HEIGHT 64
+#define NUM_TRACKS 1
+#define NUM_SOUNDS 1
 
 #define MAP_WIDTH 24
 #define MAP_HEIGHT 24
@@ -57,11 +56,10 @@ SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *screen = NULL;
 
-unsigned int textures[NUM_TEXTURES][TEXTURE_WIDTH][TEXTURE_HEIGHT];
-unsigned int sprites[NUM_SPRITES][SPRITE_WIDTH][SPRITE_HEIGHT];
+unsigned int images[NUM_IMAGES][IMAGE_WIDTH][IMAGE_HEIGHT];
 
-Mix_Music *music = NULL;
-Mix_Chunk *shoot = NULL;
+Mix_Music *tracks[NUM_TRACKS];
+Mix_Chunk *sounds[NUM_SOUNDS];
 
 TTF_Font *font = NULL;
 
@@ -144,25 +142,25 @@ int ceiling_map[MAP_WIDTH][MAP_HEIGHT] = {
     {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6}};
 
 object_t objects[NUM_OBJECTS] = {
-    {20.5, 11.5, 2},
-    {18.5, 4.50, 2},
-    {10.0, 4.50, 2},
-    {10.0, 12.5, 2},
-    {3.50, 6.50, 2},
-    {3.50, 20.5, 2},
-    {3.50, 14.5, 2},
-    {14.5, 20.5, 2},
-    {18.5, 10.5, 1},
-    {18.5, 11.5, 1},
-    {18.5, 12.5, 1},
-    {21.5, 1.50, 0},
-    {15.5, 1.50, 0},
-    {16.0, 1.80, 0},
-    {16.2, 1.20, 0},
-    {3.50, 2.50, 0},
-    {9.50, 15.5, 0},
-    {10.0, 15.1, 0},
-    {10.5, 15.8, 0},
+    {20.5, 11.5, 10},
+    {18.5, 4.50, 10},
+    {10.0, 4.50, 10},
+    {10.0, 12.5, 10},
+    {3.50, 6.50, 10},
+    {3.50, 20.5, 10},
+    {3.50, 14.5, 10},
+    {14.5, 20.5, 10},
+    {18.5, 10.5, 9},
+    {18.5, 11.5, 9},
+    {18.5, 12.5, 9},
+    {21.5, 1.50, 8},
+    {15.5, 1.50, 8},
+    {16.0, 1.80, 8},
+    {16.2, 1.20, 8},
+    {3.50, 2.50, 8},
+    {9.50, 15.5, 8},
+    {10.0, 15.1, 8},
+    {10.5, 15.8, 8},
 };
 
 double pos_x = 22.0; // start position
@@ -180,6 +178,7 @@ bool a_down = false;
 bool s_down = false;
 bool d_down = false;
 bool lshift_down = false;
+bool lbutton_down;
 
 unsigned int pixel_buffer[SCREEN_HEIGHT][SCREEN_WIDTH];
 double depth_buffer[SCREEN_HEIGHT][SCREEN_WIDTH];
@@ -221,72 +220,52 @@ int main(int argc, char *args[])
         SCREEN_HEIGHT);
 
     IMG_Init(IMG_INIT_PNG);
-
-    for (int i = 0; i < NUM_TEXTURES; i++)
+    for (int i = 0; i < NUM_IMAGES; i++)
     {
         SDL_Surface *surface = NULL;
 
         switch (i)
         {
         case 0:
-            surface = IMG_Load("eagle.png");
+            surface = IMG_Load("assets/images/eagle.png");
             break;
         case 1:
-            surface = IMG_Load("redbrick.png");
+            surface = IMG_Load("assets/images/redbrick.png");
             break;
         case 2:
-            surface = IMG_Load("purplestone.png");
+            surface = IMG_Load("assets/images/purplestone.png");
             break;
         case 3:
-            surface = IMG_Load("greystone.png");
+            surface = IMG_Load("assets/images/greystone.png");
             break;
         case 4:
-            surface = IMG_Load("bluestone.png");
+            surface = IMG_Load("assets/images/bluestone.png");
             break;
         case 5:
-            surface = IMG_Load("mossy.png");
+            surface = IMG_Load("assets/images/mossy.png");
             break;
         case 6:
-            surface = IMG_Load("wood.png");
+            surface = IMG_Load("assets/images/wood.png");
             break;
         case 7:
-            surface = IMG_Load("colorstone.png");
+            surface = IMG_Load("assets/images/colorstone.png");
+            break;
+        case 8:
+            surface = IMG_Load("assets/images/barrel.png");
+            break;
+        case 9:
+            surface = IMG_Load("assets/images/pillar.png");
+            break;
+        case 10:
+            surface = IMG_Load("assets/images/greenlight.png");
             break;
         }
 
-        for (int x = 0; x < TEXTURE_WIDTH; x++)
+        for (int x = 0; x < IMAGE_WIDTH; x++)
         {
-            for (int y = 0; y < TEXTURE_HEIGHT; y++)
+            for (int y = 0; y < IMAGE_HEIGHT; y++)
             {
-                textures[i][x][y] = get_pixel(surface, x, y);
-            }
-        }
-
-        SDL_FreeSurface(surface);
-    }
-
-    for (int i = 0; i < NUM_SPRITES; i++)
-    {
-        SDL_Surface *surface = NULL;
-
-        switch (i)
-        {
-        case 0:
-            surface = IMG_Load("barrel.png");
-            break;
-        case 1:
-            surface = IMG_Load("pillar.png");
-            break;
-        case 2:
-            surface = IMG_Load("greenlight.png");
-            break;
-        }
-
-        for (int x = 0; x < SPRITE_WIDTH; x++)
-        {
-            for (int y = 0; y < SPRITE_HEIGHT; y++)
-            {
-                sprites[i][x][y] = get_pixel(surface, x, y);
+                images[i][x][y] = get_pixel(surface, x, y);
             }
         }
 
@@ -295,14 +274,14 @@ int main(int argc, char *args[])
 
     Mix_Init(MIX_INIT_MP3);
     Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 4096);
-    music = Mix_LoadMUS("music.mp3");
-    shoot = Mix_LoadWAV("shoot.wav");
+    tracks[0] = Mix_LoadMUS("assets/audio/background.mp3");
+    sounds[0] = Mix_LoadWAV("assets/audio/shoot.wav");
 
     SDLNet_Init();
 
     // load font
     TTF_Init();
-    font = TTF_OpenFont("VeraMono.ttf", 24);
+    font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
 
     // printf("FOV: %f\n", 2 * atan(plane_y) / M_PI * 180.0);
 
@@ -330,7 +309,21 @@ int main(int argc, char *args[])
                 {
                 case SDL_BUTTON_LEFT:
                 {
-                    Mix_PlayChannel(-1, shoot, 0);
+                    lbutton_down = true;
+                }
+                break;
+                }
+            }
+            break;
+            case SDL_MOUSEBUTTONUP:
+            {
+                SDL_MouseButtonEvent button = event.button;
+
+                switch (button.button)
+                {
+                case SDL_BUTTON_LEFT:
+                {
+                    lbutton_down = false;
                 }
                 break;
                 }
@@ -438,7 +431,7 @@ int main(int argc, char *args[])
                     }
                     else
                     {
-                        Mix_PlayMusic(music, -1);
+                        Mix_PlayMusic(tracks[0], -1);
                     }
                 }
                 break;
@@ -588,6 +581,19 @@ int main(int argc, char *args[])
             }
         }
 
+        // shooting
+        static double shoot_timer = 0.0;
+        shoot_timer += delta_time;
+        if (lbutton_down)
+        {
+            if (shoot_timer >= 0.25)
+            {
+                shoot_timer = 0.0;
+
+                Mix_PlayChannel(-1, sounds[0], 0);
+            }
+        }
+
         // raycasting
         for (int x = 0; x < SCREEN_WIDTH; x++)
         {
@@ -712,23 +718,23 @@ int main(int argc, char *args[])
                     int texture_index = wall_map[map_x][map_y] - 1;
 
                     // x coordinate on the texture
-                    int texture_x = (int)(wall_x * (double)TEXTURE_WIDTH);
+                    int texture_x = (int)(wall_x * (double)IMAGE_WIDTH);
                     if (side == 0 && ray_dir_x > 0)
                     {
-                        texture_x = TEXTURE_WIDTH - texture_x - 1;
+                        texture_x = IMAGE_WIDTH - texture_x - 1;
                     }
                     if (side == 1 && ray_dir_y < 0)
                     {
-                        texture_x = TEXTURE_WIDTH - texture_x - 1;
+                        texture_x = IMAGE_WIDTH - texture_x - 1;
                     }
 
                     for (int y = draw_start; y <= draw_end; y++)
                     {
                         // y coordinate on the texture
-                        int texture_y = (((y * 256 - SCREEN_HEIGHT * 128 + line_height * 128) * TEXTURE_HEIGHT) / line_height) / 256;
+                        int texture_y = (((y * 256 - SCREEN_HEIGHT * 128 + line_height * 128) * IMAGE_HEIGHT) / line_height) / 256;
 
                         // get the color on the texture
-                        unsigned int color = textures[texture_index][texture_x][texture_y];
+                        unsigned int color = images[texture_index][texture_x][texture_y];
 
                         // make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
                         if (shading && side == 1)
@@ -796,11 +802,11 @@ int main(int argc, char *args[])
                             int texture_index = floor_map[(int)current_x][(int)current_y];
 
                             // x, y coordinate of the texture
-                            int texture_x = (int)(current_x * TEXTURE_WIDTH / FLOOR_TEXTURE_MULT) % TEXTURE_WIDTH;
-                            int texture_y = (int)(current_y * TEXTURE_HEIGHT / FLOOR_TEXTURE_MULT) % TEXTURE_HEIGHT;
+                            int texture_x = (int)(current_x * IMAGE_WIDTH / FLOOR_TEXTURE_MULT) % IMAGE_WIDTH;
+                            int texture_y = (int)(current_y * IMAGE_HEIGHT / FLOOR_TEXTURE_MULT) % IMAGE_HEIGHT;
 
                             // get the color on the texture
-                            unsigned int color = textures[texture_index][texture_x][texture_y];
+                            unsigned int color = images[texture_index][texture_x][texture_y];
 
                             if (foggy)
                             {
@@ -818,11 +824,11 @@ int main(int argc, char *args[])
                             int texture_index = ceiling_map[(int)current_x][(int)current_y];
 
                             // x, y coordinate of the texture
-                            int texture_x = (int)(current_x * TEXTURE_WIDTH / CEILING_TEXTURE_MULT) % TEXTURE_WIDTH;
-                            int texture_y = (int)(current_y * TEXTURE_HEIGHT / CEILING_TEXTURE_MULT) % TEXTURE_HEIGHT;
+                            int texture_x = (int)(current_x * IMAGE_WIDTH / CEILING_TEXTURE_MULT) % IMAGE_WIDTH;
+                            int texture_y = (int)(current_y * IMAGE_HEIGHT / CEILING_TEXTURE_MULT) % IMAGE_HEIGHT;
 
                             // get the color on the texture
-                            unsigned int color = textures[texture_index][texture_x][texture_y];
+                            unsigned int color = images[texture_index][texture_x][texture_y];
 
                             if (foggy)
                             {
@@ -998,7 +1004,7 @@ int main(int argc, char *args[])
                 for (int x = draw_start_x; x < draw_end_x; x++)
                 {
                     // x coordinate on the sprite
-                    int sprite_x = (256 * (x - (-object_width / 2 + object_screen_x)) * SPRITE_WIDTH / object_width) / 256;
+                    int sprite_x = (256 * (x - (-object_width / 2 + object_screen_x)) * IMAGE_WIDTH / object_width) / 256;
 
                     // the conditions in the if are:
                     // 1) it's in front of camera plane so you don't see things behind you
@@ -1012,10 +1018,10 @@ int main(int argc, char *args[])
                             if (transform_y < depth_buffer[y][x])
                             {
                                 // y coordinate on the sprite
-                                int sprite_y = ((((y - move_v) * 256 - SCREEN_HEIGHT * 128 + object_height * 128) * SPRITE_HEIGHT) / object_height) / 256;
+                                int sprite_y = ((((y - move_v) * 256 - SCREEN_HEIGHT * 128 + object_height * 128) * IMAGE_HEIGHT) / object_height) / 256;
 
                                 // get current color on the sprite
-                                unsigned int color = sprites[sprite_index][sprite_x][sprite_y];
+                                unsigned int color = images[sprite_index][sprite_x][sprite_y];
 
                                 if (foggy)
                                 {
@@ -1063,8 +1069,14 @@ int main(int argc, char *args[])
 
     SDLNet_Quit();
 
-    Mix_FreeMusic(music);
-    Mix_FreeChunk(shoot);
+    for (int i = 0; i < NUM_TRACKS; i++)
+    {
+        Mix_FreeMusic(tracks[i]);
+    }
+    for (int i = 0; i < NUM_SOUNDS; i++)
+    {
+        Mix_FreeChunk(sounds[i]);
+    }
     Mix_CloseAudio();
     Mix_Quit();
 
