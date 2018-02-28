@@ -1044,11 +1044,17 @@ int main(int argc, char *args[])
             }
         }
 
-        char text_buffer[256];
-        sprintf_s(text_buffer, sizeof(text_buffer), "FPS: %d", (int)(1 / delta_time));
-        SDL_Surface *text_surface = TTF_RenderText_Solid(font, text_buffer, (SDL_Color){255, 255, 255, 255});
-        SDL_Texture *text = SDL_CreateTextureFromSurface(renderer, text_surface);
-        SDL_Rect text_rect = {0, 0, 100, 50};
+        // calculate fps
+        static double fps_update_timer = 0.0;
+        static int fps = 0;
+        fps_update_timer += delta_time;
+        if (fps_update_timer >= 0.25)
+        {
+            fps_update_timer = 0.0;
+            fps = (int)(1 / delta_time);
+        }
+
+        SDL_RenderClear(renderer);
 
         // update the screen
         SDL_UpdateTexture(
@@ -1056,11 +1062,77 @@ int main(int argc, char *args[])
             NULL,
             pixel_buffer,
             SCREEN_WIDTH * sizeof(unsigned int));
-
-        // render
-        SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, screen, NULL, NULL);
-        SDL_RenderCopy(renderer, text, NULL, &text_rect);
+
+        // display FPS
+        {
+            int fps_text_len = snprintf(NULL, 0, "FPS: %d", fps);
+            char *fps_text_buffer = malloc(fps_text_len + 1);
+            sprintf_s(fps_text_buffer, fps_text_len + 1, "FPS: %d", fps);
+            SDL_Surface *fps_text_surface = TTF_RenderText_Solid(font, fps_text_buffer, (SDL_Color){255, 255, 255, 255});
+            free(fps_text_buffer);
+            SDL_Texture *fps_text_texture = SDL_CreateTextureFromSurface(renderer, fps_text_surface);
+            SDL_FreeSurface(fps_text_surface);
+            SDL_Rect fps_text_rect;
+            fps_text_rect.x = 0;
+            fps_text_rect.y = 0;
+            fps_text_rect.w = 24 * fps_text_len;
+            fps_text_rect.h = 25;
+            SDL_RenderCopy(renderer, fps_text_texture, NULL, &fps_text_rect);
+            SDL_DestroyTexture(fps_text_texture);
+        }
+
+        // display position
+        {
+            int pos_text_len = snprintf(NULL, 0, "Pos: (%f, %f)", pos_x, pos_y);
+            char *pos_text_buffer = malloc(pos_text_len + 1);
+            sprintf_s(pos_text_buffer, pos_text_len + 1, "Pos: (%f, %f)", pos_x, pos_y);
+            SDL_Surface *pos_text_surface = TTF_RenderText_Solid(font, pos_text_buffer, (SDL_Color){255, 255, 255, 255});
+            SDL_Texture *pos_text_texture = SDL_CreateTextureFromSurface(renderer, pos_text_surface);
+            SDL_FreeSurface(pos_text_surface);
+            SDL_Rect pos_text_rect;
+            pos_text_rect.x = 0;
+            pos_text_rect.y = 25;
+            pos_text_rect.w = 24 * pos_text_len;
+            pos_text_rect.h = 25;
+            SDL_RenderCopy(renderer, pos_text_texture, NULL, &pos_text_rect);
+            SDL_DestroyTexture(pos_text_texture);
+        }
+
+        // display direction
+        {
+            int dir_text_len = snprintf(NULL, 0, "Dir: (%f, %f)", dir_x, dir_y);
+            char *dir_text_buffer = malloc(dir_text_len + 1);
+            sprintf_s(dir_text_buffer, dir_text_len + 1, "Dir: (%f, %f)", dir_x, dir_y);
+            SDL_Surface *dir_text_surface = TTF_RenderText_Solid(font, dir_text_buffer, (SDL_Color){255, 255, 255, 255});
+            SDL_Texture *dir_text_texture = SDL_CreateTextureFromSurface(renderer, dir_text_surface);
+            SDL_FreeSurface(dir_text_surface);
+            SDL_Rect dir_text_rect;
+            dir_text_rect.x = 0;
+            dir_text_rect.y = 50;
+            dir_text_rect.w = 24 * dir_text_len;
+            dir_text_rect.h = 25;
+            SDL_RenderCopy(renderer, dir_text_texture, NULL, &dir_text_rect);
+            SDL_DestroyTexture(dir_text_texture);
+        }
+
+        // display camera plane
+        {
+            int plane_text_len = snprintf(NULL, 0, "Plane: (%f, %f)", plane_x, plane_y);
+            char *plane_text_buffer = malloc(plane_text_len + 1);
+            sprintf_s(plane_text_buffer, plane_text_len + 1, "Plane: (%f, %f)", plane_x, plane_y);
+            SDL_Surface *plane_text_surface = TTF_RenderText_Solid(font, plane_text_buffer, (SDL_Color){255, 255, 255, 255});
+            SDL_Texture *plane_text_texture = SDL_CreateTextureFromSurface(renderer, plane_text_surface);
+            SDL_FreeSurface(plane_text_surface);
+            SDL_Rect plane_text_rect;
+            plane_text_rect.x = 0;
+            plane_text_rect.y = 75;
+            plane_text_rect.w = 24 * plane_text_len;
+            plane_text_rect.h = 25;
+            SDL_RenderCopy(renderer, plane_text_texture, NULL, &plane_text_rect);
+            SDL_DestroyTexture(plane_text_texture);
+        }
+
         SDL_RenderPresent(renderer);
     }
 
