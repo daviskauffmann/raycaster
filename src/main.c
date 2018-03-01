@@ -1,22 +1,23 @@
 #include <float.h>
 #include <math.h>
-#include <SDL\SDL_image.h>
-#include <SDL\SDL_net.h>
-#include <SDL\SDL_mixer.h>
-#include <SDL\SDL_ttf.h>
-#include <SDL\SDL.h>
+#include <SDL/SDL_image.h>
+#include <SDL/SDL_net.h>
+#include <SDL/SDL_mixer.h>
+#include <SDL/SDL_ttf.h>
+#include <SDL/SDL.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "audio.h"
+#include "fonts.h"
 #include "net.h"
 #include "textures.h"
+#include "utils.h"
 #include "window.h"
 
 #define NUM_TEXTURES 11
-
 #define NUM_TRACKS 1
 #define NUM_SOUNDS 1
 
@@ -56,9 +57,31 @@ int main(int argc, char *args[])
     (void)args;
 
     window_init("Raycaster", 640, 400);
-    textures_init(64, 64);
+    textures_init();
+    fonts_init();
     audio_init();
     net_init();
+
+    texture_t **textures = malloc(NUM_TEXTURES * sizeof(texture_t *));
+    textures[0] = textures_load("assets/images/eagle.png");
+    textures[1] = textures_load("assets/images/redbrick.png");
+    textures[2] = textures_load("assets/images/purplestone.png");
+    textures[3] = textures_load("assets/images/greystone.png");
+    textures[4] = textures_load("assets/images/bluestone.png");
+    textures[5] = textures_load("assets/images/mossy.png");
+    textures[6] = textures_load("assets/images/wood.png");
+    textures[7] = textures_load("assets/images/colorstone.png");
+    textures[8] = textures_load("assets/images/barrel.png");
+    textures[9] = textures_load("assets/images/pillar.png");
+    textures[10] = textures_load("assets/images/greenlight.png");
+
+    Mix_Music **tracks = malloc(NUM_TRACKS * sizeof(Mix_Music *));
+    tracks[0] = audio_load_music("assets/audio/background.mp3");
+
+    Mix_Chunk **sounds = malloc(NUM_SOUNDS * sizeof(Mix_Chunk *));
+    sounds[0] = audio_load_chunk("assets/audio/shoot.wav");
+
+    TTF_Font *font = fonts_load("assets/fonts/VeraMono.ttf", 24);
 
     int wall_map[MAP_WIDTH][MAP_HEIGHT] = {
         {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
@@ -170,6 +193,8 @@ int main(int argc, char *args[])
     unsigned int previous_time = 0;
     unsigned int current_time = 0;
 
+    // TODO: array of keys?
+    // keys[KEYCODE] = true | false;
     bool w_down = false;
     bool a_down = false;
     bool s_down = false;
@@ -183,27 +208,6 @@ int main(int argc, char *args[])
     bool draw_objects = true;
     bool shading = true;
     bool foggy = true;
-
-    unsigned int *textures[NUM_TEXTURES];
-    textures[0] = textures_load("assets/images/eagle.png");
-    textures[1] = textures_load("assets/images/redbrick.png");
-    textures[2] = textures_load("assets/images/purplestone.png");
-    textures[3] = textures_load("assets/images/greystone.png");
-    textures[4] = textures_load("assets/images/bluestone.png");
-    textures[5] = textures_load("assets/images/mossy.png");
-    textures[6] = textures_load("assets/images/wood.png");
-    textures[7] = textures_load("assets/images/colorstone.png");
-    textures[8] = textures_load("assets/images/barrel.png");
-    textures[9] = textures_load("assets/images/pillar.png");
-    textures[10] = textures_load("assets/images/greenlight.png");
-
-    Mix_Music *tracks[NUM_TRACKS];
-    tracks[0] = audio_load_music("assets/audio/background.mp3");
-    Mix_Chunk *sounds[NUM_SOUNDS];
-    sounds[0] = audio_load_chunk("assets/audio/shoot.wav");
-
-    // TTF_Init();
-    // TTF_Font *font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
 
     // printf("FOV: %f\n", 2 * atan(plane_y) / M_PI * 180.0);
 
@@ -589,7 +593,6 @@ int main(int argc, char *args[])
             }
 
             // calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
-            // additionaly set the depth buffer at this slice to the distance
             double perp_wall_dist =
                 side == 0
                     ? (map_x - pos_x + (1 - step_x) / 2) / ray_dir_x
@@ -628,25 +631,26 @@ int main(int argc, char *args[])
                 {
                     // choose a texture
                     int texture_index = wall_map[map_x][map_y] - 1;
+                    texture_t texture = *textures[texture_index];
 
                     // x coordinate on the texture
-                    int texture_x = (int)(wall_x * (double)tw);
+                    int texture_x = (int)(wall_x * (double)texture.w);
                     if (side == 0 && ray_dir_x > 0)
                     {
-                        texture_x = tw - texture_x - 1;
+                        texture_x = texture.w - texture_x - 1;
                     }
                     if (side == 1 && ray_dir_y < 0)
                     {
-                        texture_x = tw - texture_x - 1;
+                        texture_x = texture.w - texture_x - 1;
                     }
 
                     for (int y = draw_start; y <= draw_end; y++)
                     {
                         // y coordinate on the texture
-                        int texture_y = (((y * 256 - h * 128 + line_height * 128) * th) / line_height) / 256;
+                        int texture_y = (((y * 256 - h * 128 + line_height * 128) * texture.h) / line_height) / 256;
 
                         // get the color on the texture
-                        unsigned int color = textures[texture_index][texture_x + texture_y * tw];
+                        unsigned int color = texture.pixels[texture_x + texture_y * texture.w];
 
                         // make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
                         if (shading && side == 1)
@@ -712,13 +716,14 @@ int main(int argc, char *args[])
                         {
                             // choose a texture
                             int texture_index = floor_map[(int)current_x][(int)current_y];
+                            texture_t texture = *textures[texture_index];
 
                             // x, y coordinate of the texture
-                            int texture_x = (int)(current_x * tw / FLOOR_TEXTURE_MULT) % tw;
-                            int texture_y = (int)(current_y * th / FLOOR_TEXTURE_MULT) % th;
+                            int texture_x = (int)(current_x * texture.w / FLOOR_TEXTURE_MULT) % texture.w;
+                            int texture_y = (int)(current_y * texture.h / FLOOR_TEXTURE_MULT) % texture.h;
 
                             // get the color on the texture
-                            unsigned int color = textures[texture_index][texture_x + texture_y * tw];
+                            unsigned int color = texture.pixels[texture_x + texture_y * texture.w];
 
                             if (foggy)
                             {
@@ -734,13 +739,14 @@ int main(int argc, char *args[])
                         {
                             // choose a texture
                             int texture_index = ceiling_map[(int)current_x][(int)current_y];
+                            texture_t texture = *textures[texture_index];
 
                             // x, y coordinate of the texture
-                            int texture_x = (int)(current_x * tw / CEILING_TEXTURE_MULT) % tw;
-                            int texture_y = (int)(current_y * th / CEILING_TEXTURE_MULT) % th;
+                            int texture_x = (int)(current_x * texture.w / CEILING_TEXTURE_MULT) % texture.w;
+                            int texture_y = (int)(current_y * texture.h / CEILING_TEXTURE_MULT) % texture.h;
 
                             // get the color on the texture
-                            unsigned int color = textures[texture_index][texture_x + texture_y * tw];
+                            unsigned int color = texture.pixels[texture_x + texture_y * texture.w];
 
                             if (foggy)
                             {
@@ -911,12 +917,13 @@ int main(int argc, char *args[])
 
                 // choose the sprite
                 int sprite_index = object.sprite_index;
+                texture_t sprite = *textures[sprite_index];
 
                 // loop through every vertical stripe of the sprite on screen
                 for (int x = draw_start_x; x < draw_end_x; x++)
                 {
                     // x coordinate on the sprite
-                    int sprite_x = (256 * (x - (-object_width / 2 + object_screen_x)) * tw / object_width) / 256;
+                    int sprite_x = (256 * (x - (-object_width / 2 + object_screen_x)) * sprite.w / object_width) / 256;
 
                     // the conditions in the if are:
                     // 1) it's in front of camera plane so you don't see things behind you
@@ -930,10 +937,10 @@ int main(int argc, char *args[])
                             if (transform_y < depth_buffer[x + y * w])
                             {
                                 // y coordinate on the sprite
-                                int sprite_y = ((((y - translate_y) * 256 - h * 128 + object_height * 128) * th) / object_height) / 256;
+                                int sprite_y = ((((y - translate_y) * 256 - h * 128 + object_height * 128) * sprite.h) / object_height) / 256;
 
                                 // get current color on the sprite
-                                unsigned int color = textures[sprite_index][sprite_x + sprite_y * tw];
+                                unsigned int color = sprite.pixels[sprite_x + sprite_y * sprite.w];
 
                                 if (foggy)
                                 {
@@ -1038,8 +1045,7 @@ int main(int argc, char *args[])
         // }
     }
 
-    // TTF_CloseFont(font);
-    // TTF_Quit();
+    fonts_unload(font);
 
     for (int i = 0; i < NUM_TRACKS; i++)
     {
@@ -1052,13 +1058,14 @@ int main(int argc, char *args[])
 
     for (int i = 0; i < NUM_TEXTURES; i++)
     {
-        free(textures[i]);
+        textures_unload(textures[i]);
     }
 
     free(depth_buffer);
 
     net_quit();
     audio_quit();
+    fonts_quit();
     textures_quit();
     window_close();
 

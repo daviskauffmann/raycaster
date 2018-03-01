@@ -4,35 +4,39 @@
 #include "textures.h"
 #include "utils.h"
 
-int tw = 0;
-int th = 0;
-
 internal unsigned int get_pixel(SDL_Surface *surface, int x, int y);
 internal void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
 
-void textures_init(int texture_width, int texture_height)
+void textures_init()
 {
-    tw = texture_width;
-    th = texture_height;
-
     IMG_Init(IMG_INIT_PNG);
 }
 
-unsigned int *textures_load(const char *file)
+texture_t *textures_load(const char *file)
 {
-    unsigned int *pixels = malloc(tw * th * sizeof(unsigned int));
-
     SDL_Surface *surface = IMG_Load(file);
-    for (int tx = 0; tx < tw; tx++)
+
+    texture_t *texture = malloc(sizeof(texture_t));
+    texture->w = surface->w;
+    texture->h = surface->h;
+    texture->pixels = malloc(texture->w * surface->h * sizeof(unsigned int));
+    for (int x = 0; x < texture->w; x++)
     {
-        for (int ty = 0; ty < th; ty++)
+        for (int y = 0; y < texture->h; y++)
         {
-            pixels[tx + ty * tw] = get_pixel(surface, tx, ty);
+            texture->pixels[x + y * texture->w] = get_pixel(surface, x, y);
         }
     }
+
     SDL_FreeSurface(surface);
 
-    return pixels;
+    return texture;
+}
+
+void textures_unload(texture_t *texture)
+{
+    free(texture->pixels);
+    free(texture);
 }
 
 void textures_quit(void)

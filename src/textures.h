@@ -1,11 +1,16 @@
 #ifndef IMAGE_H
 #define IMAGE_H
 
-extern int tw;
-extern int th;
+typedef struct texture_s
+{
+    int w;
+    int h;
+    unsigned int *pixels;
+} texture_t;
 
-void textures_init(int texture_width, int texture_height);
-unsigned int *textures_load(const char *file);
+void textures_init();
+texture_t *textures_load(const char *file);
+void textures_unload(texture_t *texture);
 void textures_quit(void);
 
 #endif
