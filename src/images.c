@@ -1,45 +1,45 @@
 #include <SDL/SDL_image.h>
 #include <SDL/SDL.h>
 
-#include "textures.h"
+#include "images.h"
 #include "utils.h"
 
 internal unsigned int get_pixel(SDL_Surface *surface, int x, int y);
 internal void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
 
-void textures_init()
+void images_init()
 {
     IMG_Init(IMG_INIT_PNG);
 }
 
-texture_t *textures_load(const char *file)
+image_t *images_load(const char *file)
 {
     SDL_Surface *surface = IMG_Load(file);
 
-    texture_t *texture = malloc(sizeof(texture_t));
-    texture->w = surface->w;
-    texture->h = surface->h;
-    texture->pixels = malloc(texture->w * surface->h * sizeof(unsigned int));
-    for (int x = 0; x < texture->w; x++)
+    image_t *image = malloc(sizeof(image_t));
+    image->w = surface->w;
+    image->h = surface->h;
+    image->pixels = malloc(image->w * surface->h * sizeof(unsigned int));
+    for (int x = 0; x < image->w; x++)
     {
-        for (int y = 0; y < texture->h; y++)
+        for (int y = 0; y < image->h; y++)
         {
-            texture->pixels[x + y * texture->w] = get_pixel(surface, x, y);
+            image->pixels[x + y * image->w] = get_pixel(surface, x, y);
         }
     }
 
     SDL_FreeSurface(surface);
 
-    return texture;
+    return image;
 }
 
-void textures_unload(texture_t *texture)
+void images_unload(image_t *image)
 {
-    free(texture->pixels);
-    free(texture);
+    free(image->pixels);
+    free(image);
 }
 
-void textures_quit(void)
+void images_quit(void)
 {
     IMG_Quit();
 }
