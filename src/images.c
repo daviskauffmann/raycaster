@@ -19,7 +19,7 @@ image_t *images_load(const char *file)
     image_t *image = malloc(sizeof(image_t));
     image->w = surface->w;
     image->h = surface->h;
-    image->pixels = malloc(image->w * surface->h * sizeof(unsigned int));
+    image->pixels = malloc(image->w * image->h * sizeof(unsigned int));
     for (int x = 0; x < image->w; x++)
     {
         for (int y = 0; y < image->h; y++)

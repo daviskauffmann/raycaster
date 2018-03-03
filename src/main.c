@@ -13,6 +13,7 @@
 #include "audio.h"
 #include "fonts.h"
 #include "images.h"
+#include "math.h"
 #include "net.h"
 #include "utils.h"
 #include "window.h"
@@ -185,13 +186,14 @@ int main(int argc, char *args[])
     (void)argc;
     (void)args;
 
-    window_init("Raycaster", 640, 400);
+    window_init("Raycaster", 320, 200);
     images_init();
     fonts_init();
     audio_init();
     net_init();
 
     image_t **textures = malloc(NUM_TEXTURES * sizeof(image_t *));
+#if 1
     textures[0] = images_load("assets/images/eagle.png");
     textures[1] = images_load("assets/images/redbrick.png");
     textures[2] = images_load("assets/images/purplestone.png");
@@ -200,6 +202,38 @@ int main(int argc, char *args[])
     textures[5] = images_load("assets/images/mossy.png");
     textures[6] = images_load("assets/images/wood.png");
     textures[7] = images_load("assets/images/colorstone.png");
+#else
+#define TEXTURE_WIDTH 64
+#define TEXTURE_HEIGHT 64
+
+    for (int i = 0; i < NUM_TEXTURES; i++)
+    {
+        textures[i] = malloc(sizeof(image_t));
+        textures[i]->w = TEXTURE_WIDTH;
+        textures[i]->h = TEXTURE_HEIGHT;
+        textures[i]->pixels = malloc(textures[i]->w * textures[i]->h * sizeof(unsigned int));
+    }
+
+    //generate some textures
+    for (int x = 0; x < TEXTURE_WIDTH; x++)
+    {
+        for (int y = 0; y < TEXTURE_HEIGHT; y++)
+        {
+            int xorcolor = (x * 256 / TEXTURE_WIDTH) ^ (y * 256 / TEXTURE_HEIGHT);
+            //int xcolor = x * 256 / texWidth;
+            int ycolor = y * 256 / TEXTURE_HEIGHT;
+            int xycolor = y * 128 / TEXTURE_HEIGHT + x * 128 / TEXTURE_WIDTH;
+            textures[0]->pixels[TEXTURE_WIDTH * y + x] = 65536 * 254 * (x != y && x != TEXTURE_WIDTH - y); //flat red texture with black cross
+            textures[1]->pixels[TEXTURE_WIDTH * y + x] = xycolor + 256 * xycolor + 65536 * xycolor;        //sloped greyscale
+            textures[2]->pixels[TEXTURE_WIDTH * y + x] = 256 * xycolor + 65536 * xycolor;                  //sloped yellow gradient
+            textures[3]->pixels[TEXTURE_WIDTH * y + x] = xorcolor + 256 * xorcolor + 65536 * xorcolor;     //xor greyscale
+            textures[4]->pixels[TEXTURE_WIDTH * y + x] = 256 * xorcolor;                                   //xor green
+            textures[5]->pixels[TEXTURE_WIDTH * y + x] = 65536 * 192 * (x % 16 && y % 16);                 //red bricks
+            textures[6]->pixels[TEXTURE_WIDTH * y + x] = 65536 * ycolor;                                   //red gradient
+            textures[7]->pixels[TEXTURE_WIDTH * y + x] = 128 + 256 * 128 + 65536 * 128;                    //flat grey texture
+        }
+    }
+#endif
 
     image_t **sprites = malloc(NUM_SPRITES * sizeof(image_t));
     sprites[0] = images_load("assets/images/barrel.png");
@@ -531,10 +565,6 @@ int main(int argc, char *args[])
             double ray_dir_x = (camera_x * plane_x) + dir_x;
             double ray_dir_y = (camera_x * plane_y) + dir_y;
 
-            // length of ray from one x or y-side to next x or y-side
-            double delta_dist_x = fabs(1.0 / ray_dir_x);
-            double delta_dist_y = fabs(1.0 / ray_dir_y);
-
             // which box of the map we're in
             int map_x = (int)pos_x;
             int map_y = (int)pos_y;
@@ -543,6 +573,10 @@ int main(int argc, char *args[])
             double side_dist_x;
             double side_dist_y;
 
+            // length of ray from one x or y-side to next x or y-side
+            double delta_dist_x = fabs(1.0 / ray_dir_x);
+            double delta_dist_y = fabs(1.0 / ray_dir_y);
+
             // what direction to step in x or y-direction (either +1 or -1)
             int step_x;
             int step_y;
@@ -550,23 +584,23 @@ int main(int argc, char *args[])
             // calculate step and initial sideDist
             if (ray_dir_x < 0)
             {
-                step_x = -1;
                 side_dist_x = (pos_x - map_x) * delta_dist_x;
+                step_x = -1;
             }
             else
             {
-                step_x = 1;
                 side_dist_x = (map_x + 1.0 - pos_x) * delta_dist_x;
+                step_x = 1;
             }
             if (ray_dir_y < 0)
             {
-                step_y = -1;
                 side_dist_y = (pos_y - map_y) * delta_dist_y;
+                step_y = -1;
             }
             else
             {
-                step_y = 1;
                 side_dist_y = (map_y + 1.0 - pos_y) * delta_dist_y;
+                step_y = 1;
             }
 
             // was a NS or a EW wall hit?
@@ -578,14 +612,14 @@ int main(int argc, char *args[])
                 // jump to next map square, OR in x-direction, OR in y-direction
                 if (side_dist_x < side_dist_y)
                 {
-                    side_dist_x += delta_dist_x;
                     map_x += step_x;
+                    side_dist_x += delta_dist_x;
                     side = 0;
                 }
                 else
                 {
-                    side_dist_y += delta_dist_y;
                     map_y += step_y;
+                    side_dist_y += delta_dist_y;
                     side = 1;
                 }
 
