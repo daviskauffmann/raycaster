@@ -1,5 +1,7 @@
 @echo off
 
+set APP_NAME=raycaster
+
 cd bin
-raycaster.exe
+%APP_NAME%.exe
 cd ..\

@@ -5,8 +5,8 @@ Thumbs.db
 
 build
 
-raycaster.exe
-raycaster.exp
-raycaster.ilk
-raycaster.lib
-raycaster.pdb
+bin/*.exe
+bin/*.exp
+bin/*.ilk
+bin/*.lib
+bin/*.pdb
