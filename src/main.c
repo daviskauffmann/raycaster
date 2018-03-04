@@ -250,7 +250,7 @@ int main(int argc, char *args[])
 
     // printf("FOV: %f\n", 2 * atan(plane_y) / M_PI * 180.0);
 
-    double *depth_buffer = malloc(w * h * sizeof(double));
+    float *depth_buffer = malloc(w * h * sizeof(float));
 
     while (!quit)
     {
@@ -555,7 +555,7 @@ int main(int argc, char *args[])
             for (int y = 0; y < h; y++)
             {
                 window_pset(x, y, 0);
-                depth_buffer[x + y * w] = DBL_MAX;
+                depth_buffer[x + y * w] = FLT_MAX;
             }
 
             // calculate x-coordinate in camera space
@@ -703,7 +703,7 @@ int main(int argc, char *args[])
 
                         // draw the pixel
                         window_pset(x, y, color);
-                        depth_buffer[x + y * w] = perp_wall_dist;
+                        depth_buffer[x + y * w] = (float)perp_wall_dist;
                     }
                 }
 
@@ -770,7 +770,7 @@ int main(int argc, char *args[])
 
                             // draw the pixel
                             window_pset(x, y, color);
-                            depth_buffer[x + y * w] = current_dist;
+                            depth_buffer[x + y * w] = (float)current_dist;
                         }
 
                         // ceiling
@@ -798,7 +798,7 @@ int main(int argc, char *args[])
 
                             // draw the pixel
                             window_pset(x, h - y, color);
-                            depth_buffer[x + (h - y) * w] = current_dist;
+                            depth_buffer[x + (h - y) * w] = (float)current_dist;
                         }
                     }
                 }
@@ -849,7 +849,7 @@ int main(int argc, char *args[])
                     for (int y = draw_start; y <= draw_end; y++)
                     {
                         window_pset(x, y, color);
-                        depth_buffer[x + y * w] = perp_wall_dist;
+                        depth_buffer[x + y * w] = (float)perp_wall_dist;
                     }
                 }
 
@@ -868,14 +868,14 @@ int main(int argc, char *args[])
                     for (int y = draw_end + 1; y < h; y++)
                     {
                         window_pset(x, y, floor_color);
-                        depth_buffer[x + y * w] = perp_wall_dist;
+                        depth_buffer[x + y * w] = (float)perp_wall_dist;
                     }
 
                     // draw the ceiling
                     for (int y = 0; y < draw_start; y++)
                     {
                         window_pset(x, y, ceiling_color);
-                        depth_buffer[x + y * w] = perp_wall_dist;
+                        depth_buffer[x + y * w] = (float)perp_wall_dist;
                     }
                 }
             }
@@ -992,7 +992,7 @@ int main(int argc, char *args[])
                                     // unsigned int previous_color = window_pget(x, y);
 
                                     window_pset(x, y, color);
-                                    depth_buffer[x + y * w] = transform_y;
+                                    depth_buffer[x + y * w] = (float)transform_y;
                                 }
                             }
                         }
