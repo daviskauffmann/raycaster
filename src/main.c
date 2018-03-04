@@ -28,30 +28,30 @@
 
 #define NUM_OBJECTS 19
 
-#define MOVE_SPEED 5.0f
-#define SPRINT_MULT 2.0f
-#define ROTATE_SPEED 3.0f
+#define MOVE_SPEED 5.0
+#define SPRINT_MULT 2.0
+#define ROTATE_SPEED 3.0
 
 #define FLOOR_TEXTURE_MULT 1
 #define CEILING_TEXTURE_MULT 1
 
 // TODO: these should be specified on a per object basis
-#define SPRITE_SCALE_X 1.0f
-#define SPRITE_SCALE_Y 1.0f
-#define SPRITE_TRANSLATE_Y 0.0f
+#define SPRITE_SCALE_X 1.0
+#define SPRITE_SCALE_Y 1.0
+#define SPRITE_TRANSLATE_Y 0.0
 
-#define FOG_STRENGTH 0.5f
+#define FOG_STRENGTH 0.5
 
 typedef struct object_s
 {
-    float x;
-    float y;
+    double x;
+    double y;
     int sprite_index;
 } object_t;
 
-void comb_sort(int *order, float *dist, int amount);
+void comb_sort(int *order, double *dist, int amount);
 unsigned int color_darken(unsigned int color);
-unsigned int color_fog(unsigned int color, float distance);
+unsigned int color_fog(unsigned int color, double distance);
 
 int wall_map[MAP_WIDTH][MAP_HEIGHT] = {
     {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
@@ -132,33 +132,33 @@ int ceiling_map[MAP_WIDTH][MAP_HEIGHT] = {
     {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6}};
 
 object_t objects[NUM_OBJECTS] = {
-    {20.5f, 11.5f, 2},
-    {18.5f, 4.50f, 2},
-    {10.0f, 4.50f, 2},
-    {10.0f, 12.5f, 2},
-    {3.50f, 6.50f, 2},
-    {3.50f, 20.5f, 2},
-    {3.50f, 14.5f, 2},
-    {14.5f, 20.5f, 2},
-    {18.5f, 10.5f, 1},
-    {18.5f, 11.5f, 1},
-    {18.5f, 12.5f, 1},
-    {21.5f, 1.50f, 0},
-    {15.5f, 1.50f, 0},
-    {16.0f, 1.80f, 0},
-    {16.2f, 1.20f, 0},
-    {3.50f, 2.50f, 0},
-    {9.50f, 15.5f, 0},
-    {10.0f, 15.1f, 0},
-    {10.5f, 15.8f, 0},
+    {20.5, 11.5, 2},
+    {18.5, 4.50, 2},
+    {10.0, 4.50, 2},
+    {10.0, 12.5, 2},
+    {3.50, 6.50, 2},
+    {3.50, 20.5, 2},
+    {3.50, 14.5, 2},
+    {14.5, 20.5, 2},
+    {18.5, 10.5, 1},
+    {18.5, 11.5, 1},
+    {18.5, 12.5, 1},
+    {21.5, 1.50, 0},
+    {15.5, 1.50, 0},
+    {16.0, 1.80, 0},
+    {16.2, 1.20, 0},
+    {3.50, 2.50, 0},
+    {9.50, 15.5, 0},
+    {10.0, 15.1, 0},
+    {10.5, 15.8, 0},
 };
 
-float pos_x = 22.0f; // start position
-float pos_y = 11.5f;
-float dir_x = -1.0f; // direction vector
-float dir_y = 0.0f;
-float plane_x = 0.0f; // camera plane
-float plane_y = 1.0f;
+double pos_x = 22.0; // start position
+double pos_y = 11.5;
+double dir_x = -1.0; // direction vector
+double dir_y = 0.0;
+double plane_x = 0.0; // camera plane
+double plane_y = 1.0;
 
 unsigned int previous_time = 0;
 unsigned int current_time = 0;
@@ -251,14 +251,14 @@ int main(int argc, char *args[])
 
     // printf("FOV: %f\n", 2 * atan(plane_y) / M_PI * 180.0);
 
-    float *depth_buffer = malloc(w * h * sizeof(float));
+    double *depth_buffer = malloc(w * h * sizeof(double));
 
     while (!quit)
     {
         // timing for input and FPS counter
         previous_time = current_time;
         current_time = SDL_GetTicks();
-        float delta_time = (current_time - previous_time) / 1000.0f;
+        double delta_time = (current_time - previous_time) / 1000.0;
 
         // handle input
         SDL_Event event;
@@ -302,16 +302,16 @@ int main(int argc, char *args[])
 
                 // calculate rotation vector
                 // the constant value is in radians/second
-                float angle = -mouse_dx / 1000.0f * ROTATE_SPEED;
-                float rot_x = cosf(angle);
-                float rot_y = sinf(angle);
+                double angle = -mouse_dx / 1000.0 * ROTATE_SPEED;
+                double rot_x = cos(angle);
+                double rot_y = sin(angle);
 
                 // both camera direction and camera plane must be rotated
-                float old_dir_x = dir_x;
+                double old_dir_x = dir_x;
                 dir_x = dir_x * rot_x - dir_y * rot_y;
                 dir_y = old_dir_x * rot_y + dir_y * rot_x;
 
-                float old_plane_x = plane_x;
+                double old_plane_x = plane_x;
                 plane_x = plane_x * rot_x - plane_y * rot_y;
                 plane_y = old_plane_x * rot_y + plane_y * rot_x;
             }
@@ -458,7 +458,7 @@ int main(int argc, char *args[])
 
         // calculate base movement speed
         // the constant value is in squares/second
-        float move_speed = MOVE_SPEED * delta_time;
+        double move_speed = MOVE_SPEED * delta_time;
 
         // sprinting
         if (lshift_down)
@@ -469,14 +469,14 @@ int main(int argc, char *args[])
         // slow movement speed when moving diagonally
         if ((w_down && d_down) || (w_down && a_down) || (s_down && d_down) || (s_down && a_down))
         {
-            move_speed /= sqrtf(2);
+            move_speed /= sqrt(2);
         }
 
         // move forward
         if (w_down)
         {
-            float dx = dir_x * move_speed;
-            float dy = dir_y * move_speed;
+            double dx = dir_x * move_speed;
+            double dy = dir_y * move_speed;
 
             if (wall_map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
             {
@@ -491,8 +491,8 @@ int main(int argc, char *args[])
         // strafe left
         if (a_down)
         {
-            float dx = -dir_y * move_speed;
-            float dy = dir_x * move_speed;
+            double dx = -dir_y * move_speed;
+            double dy = dir_x * move_speed;
 
             if (wall_map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
             {
@@ -507,8 +507,8 @@ int main(int argc, char *args[])
         // move backward
         if (s_down)
         {
-            float dx = -dir_x * move_speed;
-            float dy = -dir_y * move_speed;
+            double dx = -dir_x * move_speed;
+            double dy = -dir_y * move_speed;
 
             if (wall_map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
             {
@@ -523,8 +523,8 @@ int main(int argc, char *args[])
         // strafe right
         if (d_down)
         {
-            float dx = dir_y * move_speed;
-            float dy = -dir_x * move_speed;
+            double dx = dir_y * move_speed;
+            double dy = -dir_x * move_speed;
 
             if (wall_map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
             {
@@ -537,13 +537,13 @@ int main(int argc, char *args[])
         }
 
         // shooting
-        static float shoot_timer = 0.0f;
+        local double shoot_timer = 0.0;
         shoot_timer += delta_time;
         if (lbutton_down)
         {
-            if (shoot_timer >= 0.25f)
+            if (shoot_timer >= 0.25)
             {
-                shoot_timer = 0.0f;
+                shoot_timer = 0.0;
 
                 audio_play_chunk(sounds[0], 0);
             }
@@ -556,27 +556,27 @@ int main(int argc, char *args[])
             for (int y = 0; y < h; y++)
             {
                 window_pset(x, y, 0);
-                depth_buffer[x + y * w] = FLT_MAX;
+                depth_buffer[x + y * w] = DBL_MAX;
             }
 
             // calculate x-coordinate in camera space
-            float camera_x = (2.0f * x / w) - 1;
+            double camera_x = (2.0 * x / w) - 1;
 
             // calculate ray position and direction
-            float ray_dir_x = (camera_x * plane_x) + dir_x;
-            float ray_dir_y = (camera_x * plane_y) + dir_y;
+            double ray_dir_x = (camera_x * plane_x) + dir_x;
+            double ray_dir_y = (camera_x * plane_y) + dir_y;
 
             // which box of the map we're in
             int map_x = (int)pos_x;
             int map_y = (int)pos_y;
 
             // length of ray from current position to next x or y-side
-            float side_dist_x;
-            float side_dist_y;
+            double side_dist_x;
+            double side_dist_y;
 
             // length of ray from one x or y-side to next x or y-side
-            float delta_dist_x = fabsf(1 / ray_dir_x);
-            float delta_dist_y = fabsf(1 / ray_dir_y);
+            double delta_dist_x = fabs(1 / ray_dir_x);
+            double delta_dist_y = fabs(1 / ray_dir_y);
 
             // what direction to step in x or y-direction (either +1 or -1)
             int step_x;
@@ -632,7 +632,7 @@ int main(int argc, char *args[])
             }
 
             // calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
-            float perp_wall_dist =
+            double perp_wall_dist =
                 side == 0
                     ? (map_x - pos_x + (1 - step_x) / 2) / ray_dir_x
                     : (map_y - pos_y + (1 - step_y) / 2) / ray_dir_y;
@@ -655,7 +655,7 @@ int main(int argc, char *args[])
             if (textured)
             {
                 // calculate where exactly the wall was hit
-                float wall_x;
+                double wall_x;
                 if (side == 0)
                 {
                     wall_x = pos_y + perp_wall_dist * ray_dir_y;
@@ -664,7 +664,7 @@ int main(int argc, char *args[])
                 {
                     wall_x = pos_x + perp_wall_dist * ray_dir_x;
                 }
-                wall_x -= floorf(wall_x);
+                wall_x -= floor(wall_x);
 
                 if (draw_walls)
                 {
@@ -711,29 +711,29 @@ int main(int argc, char *args[])
                 if (draw_floor)
                 {
                     // x, y position of the floor texel at the bottom of the wall
-                    float floor_x_wall;
-                    float floor_y_wall;
+                    double floor_x_wall;
+                    double floor_y_wall;
 
                     // 4 different wall directions possible
                     if (side == 0 && ray_dir_x > 0)
                     {
-                        floor_x_wall = (float)map_x;
+                        floor_x_wall = (double)map_x;
                         floor_y_wall = map_y + wall_x;
                     }
                     else if (side == 0 && ray_dir_x < 0)
                     {
-                        floor_x_wall = (float)(map_x + 1);
+                        floor_x_wall = (double)(map_x + 1);
                         floor_y_wall = map_y + wall_x;
                     }
                     else if (side == 1 && ray_dir_y > 0)
                     {
                         floor_x_wall = map_x + wall_x;
-                        floor_y_wall = (float)map_y;
+                        floor_y_wall = (double)map_y;
                     }
                     else // if (side == 1 && ray_dir_y < 0)
                     {
                         floor_x_wall = map_x + wall_x;
-                        floor_y_wall = (float)(map_y + 1);
+                        floor_y_wall = (double)(map_y + 1);
                     }
 
                     // becomes < 0 when the integer overflows
@@ -745,11 +745,11 @@ int main(int argc, char *args[])
                     // draw the floor from draw_end to the bottom of the screen
                     for (int y = draw_end + 1; y < h; y++)
                     {
-                        float current_dist = h / (2.0f * y - h);
-                        float weight = current_dist / perp_wall_dist;
+                        double current_dist = h / (2.0 * y - h);
+                        double weight = current_dist / perp_wall_dist;
 
-                        float current_x = weight * floor_x_wall + (1 - weight) * pos_x;
-                        float current_y = weight * floor_y_wall + (1 - weight) * pos_y;
+                        double current_x = weight * floor_x_wall + (1 - weight) * pos_x;
+                        double current_y = weight * floor_y_wall + (1 - weight) * pos_y;
 
                         // floor
                         {
@@ -886,13 +886,13 @@ int main(int argc, char *args[])
         {
             // arrays used to sort the objects
             int object_order[NUM_OBJECTS];
-            float object_dist[NUM_OBJECTS];
+            double object_dist[NUM_OBJECTS];
 
             // sort objects from far to close
             for (int i = 0; i < NUM_OBJECTS; i++)
             {
                 object_order[i] = i;
-                object_dist[i] = powf(pos_x - objects[i].x, 2) + powf(pos_y - objects[i].y, 2);
+                object_dist[i] = pow(pos_x - objects[i].x, 2) + pow(pos_y - objects[i].y, 2);
             }
             comb_sort(object_order, object_dist, NUM_OBJECTS);
 
@@ -902,19 +902,19 @@ int main(int argc, char *args[])
                 object_t object = objects[object_order[i]];
 
                 // translate object position to relative to camera
-                float object_x = object.x - pos_x;
-                float object_y = object.y - pos_y;
+                double object_x = object.x - pos_x;
+                double object_y = object.y - pos_y;
 
                 // transform object with the inverse camera matrix
                 // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
                 // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
                 // [ planeY   dirY ]                                          [ -planeY  planeX ]
                 // required for correct matrix multiplication
-                float inv_det = 1 / (plane_x * dir_y - dir_x * plane_y);
+                double inv_det = 1 / (plane_x * dir_y - dir_x * plane_y);
 
                 // transform_y is actually the depth inside the screen, that what Z is in 3D
-                float transform_x = inv_det * (dir_y * object_x - dir_x * object_y);
-                float transform_y = inv_det * (-plane_y * object_x + plane_x * object_y);
+                double transform_x = inv_det * (dir_y * object_x - dir_x * object_y);
+                double transform_y = inv_det * (-plane_y * object_x + plane_x * object_y);
 
                 // where the object is on the screen
                 int object_screen_x = (int)((w / 2) * (1 + transform_x / transform_y));
@@ -952,7 +952,7 @@ int main(int argc, char *args[])
                 }
 
                 // calculate angle of object to player
-                // float angle = atan2f(object_y, object_y);
+                // double angle = atan2f(object_y, object_y);
 
                 // choose the sprite
                 int sprite_index = object.sprite_index;
@@ -1003,12 +1003,12 @@ int main(int argc, char *args[])
         }
 
         // calculate fps
-        static float fps_update_timer = 0.0f;
+        static double fps_update_timer = 0.0;
         static int fps = 0;
         fps_update_timer += delta_time;
-        if (fps_update_timer >= 0.25f)
+        if (fps_update_timer >= 0.25)
         {
-            fps_update_timer = 0.0f;
+            fps_update_timer = 0.0;
             fps = (int)(1 / delta_time);
         }
 
@@ -1111,7 +1111,7 @@ int main(int argc, char *args[])
     return 0;
 }
 
-void comb_sort(int *order, float *dist, int amount)
+void comb_sort(int *order, double *dist, int amount)
 {
     int gap = amount;
     bool swapped = false;
@@ -1134,7 +1134,7 @@ void comb_sort(int *order, float *dist, int amount)
             int j = i + gap;
             if (dist[i] < dist[j])
             {
-                float temp_dist = dist[i];
+                double temp_dist = dist[i];
                 dist[i] = dist[j];
                 dist[j] = temp_dist;
 
@@ -1156,7 +1156,7 @@ unsigned int color_darken(unsigned int color)
 
 // TODO: optimize
 // this drops the framerate by about 20
-unsigned int color_fog(unsigned int color, float distance)
+unsigned int color_fog(unsigned int color, double distance)
 {
     // separate the colors
     int red = (color >> 16) & 0x0FF;
@@ -1164,20 +1164,20 @@ unsigned int color_fog(unsigned int color, float distance)
     int blue = color & 0x0FF;
 
     // modify the colors
-    float fog_intensity = distance * FOG_STRENGTH;
+    double fog_intensity = distance * FOG_STRENGTH;
     if (fog_intensity > 1)
     {
-        float float_red = (float)red;
-        float float_green = (float)green;
-        float float_blue = (float)blue;
+        double double_red = (double)red;
+        double double_green = (double)green;
+        double double_blue = (double)blue;
 
-        float_red /= fog_intensity;
-        float_green /= fog_intensity;
-        float_blue /= fog_intensity;
+        double_red /= fog_intensity;
+        double_green /= fog_intensity;
+        double_blue /= fog_intensity;
 
-        red = (int)float_red;
-        green = (int)float_green;
-        blue = (int)float_blue;
+        red = (int)double_red;
+        green = (int)double_green;
+        blue = (int)double_blue;
     }
 
     // recombine the colors
