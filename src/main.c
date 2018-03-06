@@ -46,14 +46,14 @@ typedef struct object_s
 {
     double x;
     double y;
-    int sprite_index;
+    unsigned char sprite_index;
 } object_t;
 
 void comb_sort(int *order, double *dist, int amount);
 unsigned int color_darken(unsigned int color);
 unsigned int color_fog(unsigned int color, double distance);
 
-int wall_map[MAP_WIDTH][MAP_HEIGHT] = {
+unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT] = {
     {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
     {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
     {8, 0, 3, 3, 0, 0, 0, 0, 0, 8, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6},
@@ -79,7 +79,7 @@ int wall_map[MAP_WIDTH][MAP_HEIGHT] = {
     {2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 2, 2, 0, 5, 0, 5, 0, 0, 0, 5, 5},
     {2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5}};
 
-int floor_map[MAP_WIDTH][MAP_HEIGHT] = {
+unsigned char floor_map[MAP_WIDTH][MAP_HEIGHT] = {
     {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
     {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
     {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
@@ -105,7 +105,7 @@ int floor_map[MAP_WIDTH][MAP_HEIGHT] = {
     {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
     {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}};
 
-int ceiling_map[MAP_WIDTH][MAP_HEIGHT] = {
+unsigned char ceiling_map[MAP_WIDTH][MAP_HEIGHT] = {
     {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
     {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
     {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
@@ -162,15 +162,6 @@ double plane_y = 1.0;
 
 unsigned int previous_time = 0;
 unsigned int current_time = 0;
-
-// TODO: array of keys?
-// keys[KEYCODE] = true | false;
-bool w_down = false;
-bool a_down = false;
-bool s_down = false;
-bool d_down = false;
-bool lshift_down = false;
-bool lbutton_down = false;
 
 bool textured = true;
 bool draw_walls = true;
@@ -266,34 +257,6 @@ int main(int argc, char *args[])
         {
             switch (event.type)
             {
-            case SDL_MOUSEBUTTONDOWN:
-            {
-                SDL_MouseButtonEvent button = event.button;
-
-                switch (button.button)
-                {
-                case SDL_BUTTON_LEFT:
-                {
-                    lbutton_down = true;
-                }
-                break;
-                }
-            }
-            break;
-            case SDL_MOUSEBUTTONUP:
-            {
-                SDL_MouseButtonEvent button = event.button;
-
-                switch (button.button)
-                {
-                case SDL_BUTTON_LEFT:
-                {
-                    lbutton_down = false;
-                }
-                break;
-                }
-            }
-            break;
             case SDL_MOUSEMOTION:
             {
                 // the movement of the mouse in the x, y direction
@@ -323,31 +286,6 @@ int main(int argc, char *args[])
 
                 switch (key)
                 {
-                case SDLK_w:
-                {
-                    w_down = true;
-                }
-                break;
-                case SDLK_a:
-                {
-                    a_down = true;
-                }
-                break;
-                case SDLK_s:
-                {
-                    s_down = true;
-                }
-                break;
-                case SDLK_d:
-                {
-                    d_down = true;
-                }
-                break;
-                case SDLK_LSHIFT:
-                {
-                    lshift_down = true;
-                }
-                break;
                 case SDLK_F1:
                 {
                     textured = !textured;
@@ -413,41 +351,6 @@ int main(int argc, char *args[])
                 }
             }
             break;
-            case SDL_KEYUP:
-            {
-                SDL_Keycode key = event.key.keysym.sym;
-                // SDL_Keymod mod = event.key.keysym.mod;
-
-                switch (key)
-                {
-                case SDLK_w:
-                {
-                    w_down = false;
-                }
-                break;
-                case SDLK_a:
-                {
-                    a_down = false;
-                }
-                break;
-                case SDLK_s:
-                {
-                    s_down = false;
-                }
-                break;
-                case SDLK_d:
-                {
-                    d_down = false;
-                }
-                break;
-                case SDLK_LSHIFT:
-                {
-                    lshift_down = false;
-                }
-                break;
-                }
-            }
-            break;
             case SDL_QUIT:
             {
                 quit = true;
@@ -456,24 +359,31 @@ int main(int argc, char *args[])
             }
         }
 
+        const unsigned char *keys = SDL_GetKeyboardState(NULL);
+        unsigned int mouse = SDL_GetMouseState(NULL, NULL);
+
         // calculate base movement speed
         // the constant value is in squares/second
         double move_speed = MOVE_SPEED * delta_time;
 
         // sprinting
-        if (lshift_down)
+        if (keys[SDL_SCANCODE_LSHIFT])
         {
             move_speed *= SPRINT_MULT;
         }
 
         // slow movement speed when moving diagonally
-        if ((w_down && d_down) || (w_down && a_down) || (s_down && d_down) || (s_down && a_down))
+        if ((keys[SDL_SCANCODE_W] && keys[SDL_SCANCODE_D]) ||
+            (keys[SDL_SCANCODE_W] && keys[SDL_SCANCODE_A]) ||
+            (keys[SDL_SCANCODE_S] && keys[SDL_SCANCODE_D]) ||
+            (keys[SDL_SCANCODE_S] && keys[SDL_SCANCODE_A]))
         {
-            move_speed /= sqrt(2);
+            // precompute 1 / sqrt(2)
+            move_speed *= 0.71;
         }
 
         // move forward
-        if (w_down)
+        if (keys[SDL_SCANCODE_W])
         {
             double dx = dir_x * move_speed;
             double dy = dir_y * move_speed;
@@ -489,7 +399,7 @@ int main(int argc, char *args[])
         }
 
         // strafe left
-        if (a_down)
+        if (keys[SDL_SCANCODE_A])
         {
             double dx = -dir_y * move_speed;
             double dy = dir_x * move_speed;
@@ -505,7 +415,7 @@ int main(int argc, char *args[])
         }
 
         // move backward
-        if (s_down)
+        if (keys[SDL_SCANCODE_S])
         {
             double dx = -dir_x * move_speed;
             double dy = -dir_y * move_speed;
@@ -521,7 +431,7 @@ int main(int argc, char *args[])
         }
 
         // strafe right
-        if (d_down)
+        if (keys[SDL_SCANCODE_D])
         {
             double dx = dir_y * move_speed;
             double dy = -dir_x * move_speed;
@@ -539,7 +449,7 @@ int main(int argc, char *args[])
         // shooting
         local double shoot_timer = 0.0;
         shoot_timer += delta_time;
-        if (lbutton_down)
+        if (mouse & SDL_BUTTON(SDL_BUTTON_LEFT))
         {
             if (shoot_timer >= 0.25)
             {
@@ -952,7 +862,7 @@ int main(int argc, char *args[])
                 }
 
                 // calculate angle of object to player
-                // double angle = atan2f(object_y, object_y);
+                // double angle = atan2(object_y, object_y);
 
                 // choose the sprite
                 int sprite_index = object.sprite_index;
