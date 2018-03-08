@@ -1,8 +1,9 @@
 #include <SDL/SDL_image.h>
 #include <SDL/SDL.h>
 
+#include "../shared/utils.h"
+
 #include "images.h"
-#include "utils.h"
 
 internal unsigned int get_pixel(SDL_Surface *surface, int x, int y);
 internal void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);

@@ -10,12 +10,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../shared/maths.h"
+#include "../shared/utils.h"
+
 #include "audio.h"
 #include "fonts.h"
 #include "images.h"
-#include "math.h"
 #include "net.h"
-#include "utils.h"
 #include "window.h"
 
 #define NUM_TEXTURES 8
@@ -30,7 +31,7 @@
 
 #define MOVE_SPEED 5.0
 #define SPRINT_MULT 2.0
-#define ROTATE_SPEED 3.0
+#define ROTATE_SENSITIVITY 3.0
 
 #define FLOOR_TEXTURE_MULT 1
 #define CEILING_TEXTURE_MULT 1
@@ -49,6 +50,8 @@ typedef struct object_s
     unsigned char sprite_index;
 } object_t;
 
+void player_move(double dx, double dy);
+void player_rotate(double angle);
 void comb_sort(int *order, double *dist, int amount);
 unsigned int color_darken(unsigned int color);
 unsigned int color_fog(unsigned int color, double distance);
@@ -263,20 +266,11 @@ int main(int argc, char *args[])
                 int mouse_dx = event.motion.xrel;
                 // int mouse_dy = event.motion.yrel;
 
-                // calculate rotation vector
+                // calculate rotation angle
                 // the constant value is in radians/second
-                double angle = -mouse_dx / 1000.0 * ROTATE_SPEED;
-                double rot_x = cos(angle);
-                double rot_y = sin(angle);
+                double angle = -mouse_dx / 1000.0 * ROTATE_SENSITIVITY;
 
-                // both camera direction and camera plane must be rotated
-                double old_dir_x = dir_x;
-                dir_x = dir_x * rot_x - dir_y * rot_y;
-                dir_y = old_dir_x * rot_y + dir_y * rot_x;
-
-                double old_plane_x = plane_x;
-                plane_x = plane_x * rot_x - plane_y * rot_y;
-                plane_y = old_plane_x * rot_y + plane_y * rot_x;
+                player_rotate(angle);
             }
             break;
             case SDL_KEYDOWN:
@@ -388,14 +382,7 @@ int main(int argc, char *args[])
             double dx = dir_x * move_speed;
             double dy = dir_y * move_speed;
 
-            if (wall_map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
-            {
-                pos_x += dx;
-            }
-            if (wall_map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
-            {
-                pos_y += dy;
-            }
+            player_move(dx, dy);
         }
 
         // strafe left
@@ -404,14 +391,7 @@ int main(int argc, char *args[])
             double dx = -dir_y * move_speed;
             double dy = dir_x * move_speed;
 
-            if (wall_map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
-            {
-                pos_x += dx;
-            }
-            if (wall_map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
-            {
-                pos_y += dy;
-            }
+            player_move(dx, dy);
         }
 
         // move backward
@@ -420,14 +400,7 @@ int main(int argc, char *args[])
             double dx = -dir_x * move_speed;
             double dy = -dir_y * move_speed;
 
-            if (wall_map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
-            {
-                pos_x += dx;
-            }
-            if (wall_map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
-            {
-                pos_y += dy;
-            }
+            player_move(dx, dy);
         }
 
         // strafe right
@@ -436,14 +409,21 @@ int main(int argc, char *args[])
             double dx = dir_y * move_speed;
             double dy = -dir_x * move_speed;
 
-            if (wall_map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
-            {
-                pos_x += dx;
-            }
-            if (wall_map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
-            {
-                pos_y += dy;
-            }
+            player_move(dx, dy);
+        }
+
+        // calculate rotation angle
+        // the constant value is in radians/second
+        double angle = ROTATE_SENSITIVITY * delta_time;
+
+        if (keys[SDL_SCANCODE_Q])
+        {
+            player_rotate(angle);
+        }
+
+        if (keys[SDL_SCANCODE_E])
+        {
+            player_rotate(-angle);
         }
 
         // shooting
@@ -1019,6 +999,33 @@ int main(int argc, char *args[])
     window_close();
 
     return 0;
+}
+
+void player_move(double dx, double dy)
+{
+    if (wall_map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
+    {
+        pos_x += dx;
+    }
+    if (wall_map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
+    {
+        pos_y += dy;
+    }
+}
+
+void player_rotate(double angle)
+{
+    double rot_x = cos(angle);
+    double rot_y = sin(angle);
+
+    // both camera direction and camera plane must be rotated
+    double old_dir_x = dir_x;
+    dir_x = dir_x * rot_x - dir_y * rot_y;
+    dir_y = old_dir_x * rot_y + dir_y * rot_x;
+
+    double old_plane_x = plane_x;
+    plane_x = plane_x * rot_x - plane_y * rot_y;
+    plane_y = old_plane_x * rot_y + plane_y * rot_x;
 }
 
 void comb_sort(int *order, double *dist, int amount)

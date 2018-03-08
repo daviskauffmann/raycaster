@@ -1,8 +1,9 @@
 #include <SDL/SDL_image.h>
 #include <SDL/SDL.h>
 
+#include "../shared/utils.h"
+
 #include "window.h"
-#include "utils.h"
 
 int w = 0;
 int h = 0;
