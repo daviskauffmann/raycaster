@@ -4,7 +4,7 @@
 #include <SDL\SDL_mixer.h>
 #include <SDL\SDL.h>
 
-void audio_init(void);
+int audio_init(void);
 Mix_Music *audio_load_music(const char *file);
 Mix_Chunk *audio_load_chunk(const char *file);
 void audio_play_music(Mix_Music *music, int loops);

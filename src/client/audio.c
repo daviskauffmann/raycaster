@@ -3,10 +3,31 @@
 
 #include "audio.h"
 
-void audio_init(void)
+#define FLAGS 0
+#define FREQUENCY 44100
+#define FORMAT MIX_DEFAULT_FORMAT
+#define CHANNELS 2
+#define CHUNK_SIZE 1024
+
+int audio_init(void)
 {
-    Mix_Init(MIX_INIT_MP3);
-    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
+    if ((Mix_Init(FLAGS) & FLAGS) != FLAGS)
+    {
+        SDL_Log("Mix_Init: %s", Mix_GetError());
+
+        return 1;
+    }
+
+    if (Mix_OpenAudio(FREQUENCY, FORMAT, CHANNELS, CHUNK_SIZE) != 0)
+    {
+        SDL_Log("Mix_OpenAudio: %s", Mix_GetError());
+
+        return 1;
+    }
+
+    SDL_Log("Audio initialized");
+
+    return 0;
 }
 
 Mix_Music *audio_load_music(const char *file)

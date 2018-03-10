@@ -1,6 +1,6 @@
 @echo off
 
-set SRC_DIR=src\server\*.c
+set SRC_DIR=src\server\*.c src\shared\*.c
 
 set COMPILER_OPTS=/Fdbuild\x86\server\ /Febin\x86\server\server.exe /Fobuild\x86\server\ /Iinclude /W4 /Zi
 set LINKER_OPTS=/libpath:lib\x86\ /subsystem:console

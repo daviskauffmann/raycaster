@@ -2,4 +2,4 @@
 
 cd bin\x86\client\
 client.exe
-cd ..\..\
+cd ..\..\..\

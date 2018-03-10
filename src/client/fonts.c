@@ -3,9 +3,18 @@
 
 #include "fonts.h"
 
-void fonts_init(void)
+int fonts_init(void)
 {
-    TTF_Init();
+    if (TTF_Init() != 0)
+    {
+        SDL_Log("TTF_Init: %s", TTF_GetError());
+
+        return 1;
+    }
+
+    SDL_Log("Fonts initialized");
+
+    return 0;
 }
 
 TTF_Font *fonts_load(const char *file, int ptsize)

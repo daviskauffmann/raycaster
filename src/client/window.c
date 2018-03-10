@@ -13,14 +13,10 @@ internal SDL_Renderer *renderer = NULL;
 internal SDL_Texture *screen = NULL;
 internal unsigned int *pixels;
 
-void window_init(const char *title, int width, int height)
+int window_init(const char *title, int width, int height)
 {
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-
     w = width;
     h = height;
-
-    pixels = malloc(w * h * sizeof(unsigned int));
 
     window = SDL_CreateWindow(
         title,
@@ -30,10 +26,24 @@ void window_init(const char *title, int width, int height)
         h,
         SDL_WINDOW_FULLSCREEN_DESKTOP);
 
+    if (!window)
+    {
+        SDL_Log("SDL_CreateWindow: %s", SDL_GetError());
+
+        return 1;
+    }
+
     renderer = SDL_CreateRenderer(
         window,
         -1,
         0);
+
+    if (!renderer)
+    {
+        SDL_Log("SDL_CreateRenderer: %s", SDL_GetError());
+
+        return 1;
+    }
 
     screen = SDL_CreateTexture(
         renderer,
@@ -42,8 +52,21 @@ void window_init(const char *title, int width, int height)
         w,
         h);
 
+    if (!screen)
+    {
+        SDL_Log("SDL_CreateTexture: %s", SDL_GetError());
+
+        return 1;
+    }
+
+    pixels = malloc(w * h * sizeof(unsigned int));
+
     // TODO: move this somewhere else
     SDL_SetRelativeMouseMode(SDL_TRUE);
+
+    SDL_Log("Window initialized");
+
+    return 0;
 }
 
 void window_pset(int x, int y, unsigned int color)

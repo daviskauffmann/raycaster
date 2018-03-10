@@ -8,7 +8,7 @@ typedef struct image_s
     unsigned int *pixels;
 } image_t;
 
-void images_init();
+int images_init();
 image_t *images_load(const char *file);
 void images_unload(image_t *image);
 void images_quit(void);

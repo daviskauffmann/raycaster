@@ -5,17 +5,35 @@
 
 #include "images.h"
 
+#define FLAGS IMG_INIT_PNG
+
 internal unsigned int get_pixel(SDL_Surface *surface, int x, int y);
 internal void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
 
-void images_init()
+int images_init()
 {
-    IMG_Init(IMG_INIT_PNG);
+    if ((IMG_Init(FLAGS) & FLAGS) != FLAGS)
+    {
+        SDL_Log("IMG_Init: %s", IMG_GetError());
+
+        return 1;
+    }
+
+    SDL_Log("Images initialized");
+
+    return 0;
 }
 
 image_t *images_load(const char *file)
 {
     SDL_Surface *surface = IMG_Load(file);
+
+    if (!surface)
+    {
+        SDL_Log("IMG_Load: %s", IMG_GetError());
+
+        return NULL;
+    }
 
     image_t *image = malloc(sizeof(image_t));
     image->w = surface->w;

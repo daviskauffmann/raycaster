@@ -16,8 +16,13 @@
 #include "audio.h"
 #include "fonts.h"
 #include "images.h"
-#include "net.h"
+#include "system.h"
 #include "window.h"
+
+#define SERVER_HOST "127.0.0.1"
+#define SERVER_PORT 1000
+#define CLIENT_PORT 1001
+#define PACKET_SIZE 256
 
 #define NUM_TEXTURES 8
 #define NUM_SPRITES 3
@@ -55,6 +60,12 @@ void player_rotate(double angle);
 void comb_sort(int *order, double *dist, int amount);
 unsigned int color_darken(unsigned int color);
 unsigned int color_fog(unsigned int color, double distance);
+
+IPaddress ip;
+TCPsocket tcp_server = NULL;
+
+UDPsocket udp_client = NULL;
+UDPpacket *packet = NULL;
 
 unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT] = {
     {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
@@ -181,11 +192,66 @@ int main(int argc, char *args[])
     (void)argc;
     (void)args;
 
-    window_init("Raycaster", 320, 200);
-    images_init();
-    fonts_init();
-    audio_init();
-    net_init();
+    if (system_init() != 0 ||
+        window_init("Raycaster", 320, 200) != 0 ||
+        images_init() != 0 ||
+        fonts_init() != 0 ||
+        audio_init() != 0)
+    {
+        SDL_Log("Initialization failed");
+
+        return 1;
+    }
+
+    /* Net */
+    if (SDLNet_Init() != 0)
+    {
+        SDL_Log("SDLNet_Init: %s", SDLNet_GetError());
+
+        return 1;
+    }
+
+    /* TCP */
+    if (SDLNet_ResolveHost(&ip, SERVER_HOST, SERVER_PORT) != 0)
+    {
+        SDL_Log("SDLNet_ResolveHost: %s", SDLNet_GetError());
+
+        return 1;
+    }
+
+    tcp_server = SDLNet_TCP_Open(&ip);
+
+    if (!tcp_server)
+    {
+        SDL_Log("SDLNet_TCP_Open: %s", SDLNet_GetError());
+
+        // return 1;
+    }
+    else
+    {
+        SDL_Log("Connected to server %s:%i", SDLNet_ResolveIP(&ip), SDLNet_Read16(&ip.port));
+    }
+
+    /* UDP */
+    udp_client = SDLNet_UDP_Open(CLIENT_PORT);
+
+    if (!udp_client)
+    {
+        SDL_Log("SDLNet_UDP_Open: %s", SDLNet_GetError());
+
+        return 1;
+    }
+
+    packet = SDLNet_AllocPacket(PACKET_SIZE);
+
+    if (!packet)
+    {
+        SDL_Log("SDLNet_AllocPacket: %s", SDLNet_GetError());
+
+        return 1;
+    }
+
+    packet->address = ip;
 
     image_t **textures = malloc(NUM_TEXTURES * sizeof(image_t *));
 #if 1
@@ -974,6 +1040,12 @@ int main(int argc, char *args[])
         // }
     }
 
+    SDLNet_FreePacket(packet);
+    SDLNet_UDP_Close(udp_client);
+
+    SDLNet_TCP_Close(tcp_server);
+    SDLNet_Quit();
+
     fonts_unload(font);
 
     for (int i = 0; i < NUM_TRACKS; i++)
@@ -992,7 +1064,6 @@ int main(int argc, char *args[])
 
     free(depth_buffer);
 
-    net_quit();
     audio_quit();
     fonts_quit();
     images_quit();
