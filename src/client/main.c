@@ -10,16 +10,24 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../shared/net.h"
+#include "../shared/object.h"
 #include "../shared/utils.h"
 
 #define SDL_FLAGS SDL_INIT_VIDEO | SDL_INIT_AUDIO
 
 #define WINDOW_TITLE "Raycaster"
-#define SCREEN_X SDL_WINDOWPOS_UNDEFINED
-#define SCREEN_Y SDL_WINDOWPOS_UNDEFINED
+#define WINDOW_X SDL_WINDOWPOS_UNDEFINED
+#define WINDOW_Y SDL_WINDOWPOS_UNDEFINED
+#define WINDOW_FLAGS 0
+
+#define RENDERER_INDEX -1
+#define RENDERER_FLAGS 0
+
+#define SCREEN_FORMAT SDL_PIXELFORMAT_ABGR8888
+#define SCREEN_ACCESS SDL_TEXTUREACCESS_STREAMING
 #define SCREEN_WIDTH 320
 #define SCREEN_HEIGHT 200
-#define WINDOW_FLAGS 0
 
 #define IMG_FLAGS IMG_INIT_PNG
 
@@ -31,9 +39,7 @@
 
 #define SERVER_HOST "127.0.0.1"
 #define SERVER_PORT 1000
-#define CLIENT_PORT 1001
 #define MAX_SOCKETS 1
-#define PACKET_SIZE 256
 
 #define NUM_TEXTURES 8
 #define NUM_SPRITES 3
@@ -66,16 +72,9 @@ typedef struct image_s
     unsigned int *pixels;
 } image_t;
 
-typedef struct object_s
-{
-    double x;
-    double y;
-    unsigned char sprite_index;
-} object_t;
-
 unsigned int get_pixel(SDL_Surface *surface, int x, int y);
 void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
-image_t *images_load(const char *file);
+image_t *load_image(const char *file);
 void player_move(unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT], double *pos_x, double *pos_y, double dx, double dy);
 void player_rotate(double *dir_x, double *dir_y, double *plane_x, double *plane_y, double angle);
 void comb_sort(int *order, double *dist, int amount);
@@ -88,7 +87,7 @@ int main(int argc, char *args[])
     (void)argc;
     (void)args;
 
-    if (SDL_Init(SDL_FLAGS) == -1)
+    if (SDL_Init(SDL_FLAGS) != 0)
     {
         SDL_Log("SDL_Init: %s", SDL_GetError());
 
@@ -99,8 +98,8 @@ int main(int argc, char *args[])
 
     SDL_Window *window = SDL_CreateWindow(
         WINDOW_TITLE,
-        SCREEN_X,
-        SCREEN_Y,
+        WINDOW_X,
+        WINDOW_Y,
         SCREEN_WIDTH,
         SCREEN_HEIGHT,
         WINDOW_FLAGS);
@@ -114,8 +113,8 @@ int main(int argc, char *args[])
 
     SDL_Renderer *renderer = SDL_CreateRenderer(
         window,
-        -1,
-        0);
+        RENDERER_INDEX,
+        RENDERER_FLAGS);
 
     if (!renderer)
     {
@@ -126,8 +125,8 @@ int main(int argc, char *args[])
 
     SDL_Texture *screen = SDL_CreateTexture(
         renderer,
-        SDL_PIXELFORMAT_ABGR8888,
-        SDL_TEXTUREACCESS_STREAMING,
+        SCREEN_FORMAT,
+        SCREEN_ACCESS,
         SCREEN_WIDTH,
         SCREEN_HEIGHT);
 
@@ -173,25 +172,61 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    IPaddress ip;
+    IPaddress address;
 
-    if (SDLNet_ResolveHost(&ip, SERVER_HOST, SERVER_PORT) != 0)
+    if (SDLNet_ResolveHost(&address, SERVER_HOST, SERVER_PORT) != 0)
     {
         SDL_Log("SDLNet_ResolveHost: %s", SDLNet_GetError());
 
         return 1;
     }
 
-    TCPsocket tcp_server = SDLNet_TCP_Open(&ip);
+    TCPsocket tcp_socket = SDLNet_TCP_Open(&address);
 
-    if (!tcp_server)
+    if (!tcp_socket)
     {
         SDL_Log("SDLNet_TCP_Open: %s", SDLNet_GetError());
 
         return 1;
     }
+    else
+    {
+        SDL_Log("Connected to server %s:%i", SDLNet_ResolveIP(&address), SDLNet_Read16(&address.port));
 
-    SDL_Log("Connected to server %s:%i", SDLNet_ResolveIP(&ip), SDLNet_Read16(&ip.port));
+        // check if the server is full
+        {
+            tcp_send(tcp_socket, "Hello, Server!");
+
+            response_t response = tcp_recv(tcp_socket);
+
+            if (response.len > 0)
+            {
+                if (strcmp(response.data, "Server is full!") == 0)
+                {
+                    return 1;
+                }
+            }
+        }
+
+        // get map data
+        {
+            tcp_send(tcp_socket, "Requesting map!");
+
+            response_t response = tcp_recv(tcp_socket);
+
+            if (response.len > 0)
+            {
+                if (strcmp(response.data, "Here is the map!") == 0)
+                {
+                    // TODO: do something with the response data
+                }
+                else
+                {
+                    return 1;
+                }
+            }
+        }
+    }
 
     SDLNet_SocketSet sockets = SDLNet_AllocSocketSet(MAX_SOCKETS);
 
@@ -202,15 +237,15 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    SDLNet_TCP_AddSocket(sockets, tcp_server);
+    SDLNet_TCP_AddSocket(sockets, tcp_socket);
 
-    UDPsocket udp_client = SDLNet_UDP_Open(CLIENT_PORT);
+    UDPsocket udp_socket = SDLNet_UDP_Open(0);
 
-    if (!udp_client)
+    if (!udp_socket)
     {
         SDL_Log("SDLNet_UDP_Open: %s", SDLNet_GetError());
 
-        // return 1;
+        return 1;
     }
 
     UDPpacket *packet = SDLNet_AllocPacket(PACKET_SIZE);
@@ -222,24 +257,16 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    packet->address = ip;
-
-    {
-        char send[PACKET_SIZE];
-        sprintf_s(send, sizeof(send), "Hello, Server!");
-        SDLNet_TCP_Send(tcp_server, send, strlen(send) + 1);
-    }
-
     image_t **textures = malloc(NUM_TEXTURES * sizeof(image_t *));
 #if 1
-    textures[0] = images_load("assets/images/eagle.png");
-    textures[1] = images_load("assets/images/redbrick.png");
-    textures[2] = images_load("assets/images/purplestone.png");
-    textures[3] = images_load("assets/images/greystone.png");
-    textures[4] = images_load("assets/images/bluestone.png");
-    textures[5] = images_load("assets/images/mossy.png");
-    textures[6] = images_load("assets/images/wood.png");
-    textures[7] = images_load("assets/images/colorstone.png");
+    textures[0] = load_image("assets/images/eagle.png");
+    textures[1] = load_image("assets/images/redbrick.png");
+    textures[2] = load_image("assets/images/purplestone.png");
+    textures[3] = load_image("assets/images/greystone.png");
+    textures[4] = load_image("assets/images/bluestone.png");
+    textures[5] = load_image("assets/images/mossy.png");
+    textures[6] = load_image("assets/images/wood.png");
+    textures[7] = load_image("assets/images/colorstone.png");
 #else
 #define TEXTURE_WIDTH 64
 #define TEXTURE_HEIGHT 64
@@ -274,9 +301,9 @@ int main(int argc, char *args[])
 #endif
 
     image_t **sprites = malloc(NUM_SPRITES * sizeof(image_t));
-    sprites[0] = images_load("assets/images/barrel.png");
-    sprites[1] = images_load("assets/images/pillar.png");
-    sprites[2] = images_load("assets/images/greenlight.png");
+    sprites[0] = load_image("assets/images/barrel.png");
+    sprites[1] = load_image("assets/images/pillar.png");
+    sprites[2] = load_image("assets/images/greenlight.png");
 
     Mix_Music **tracks = malloc(NUM_TRACKS * sizeof(Mix_Music *));
     tracks[0] = Mix_LoadMUS("assets/audio/background.mp3");
@@ -414,15 +441,18 @@ int main(int argc, char *args[])
     {
         while (SDLNet_CheckSockets(sockets, 0) > 0)
         {
-            if (SDLNet_SocketReady(tcp_server))
+            if (SDLNet_SocketReady(tcp_socket))
             {
-                char recv[PACKET_SIZE];
-                int bytes = SDLNet_TCP_Recv(tcp_server, recv, sizeof(recv));
-                if (bytes > 0)
+                response_t response = tcp_recv(tcp_socket);
+
+                if (response.len > 0)
                 {
-                    SDL_Log("Recieved %d bytes: %s", bytes, recv);
                 }
             }
+        }
+
+        if (udp_recv(udp_socket, packet))
+        {
         }
 
         // timing for input and FPS counter
@@ -431,6 +461,9 @@ int main(int argc, char *args[])
         double delta_time = (current_time - previous_time) / 1000.0;
 
         // handle input
+        const unsigned char *keys = SDL_GetKeyboardState(NULL);
+        unsigned int mouse = SDL_GetMouseState(NULL, NULL);
+
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
@@ -513,9 +546,26 @@ int main(int argc, char *args[])
                     }
                 }
                 break;
-                case SDLK_LALT:
+                case SDLK_TAB:
                 {
                     SDL_SetRelativeMouseMode(!SDL_GetRelativeMouseMode());
+                }
+                break;
+                case SDLK_RETURN:
+                {
+                    if (keys[SDL_SCANCODE_LALT])
+                    {
+                        unsigned int flags = SDL_GetWindowFlags(window);
+
+                        if (flags & SDL_WINDOW_FULLSCREEN_DESKTOP)
+                        {
+                            SDL_SetWindowFullscreen(window, 0);
+                        }
+                        else
+                        {
+                            SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+                        }
+                    }
                 }
                 break;
                 case SDLK_ESCAPE:
@@ -533,9 +583,6 @@ int main(int argc, char *args[])
             break;
             }
         }
-
-        const unsigned char *keys = SDL_GetKeyboardState(NULL);
-        unsigned int mouse = SDL_GetMouseState(NULL, NULL);
 
         // calculate base movement speed
         // the constant value is in squares/second
@@ -618,11 +665,8 @@ int main(int argc, char *args[])
 
                 Mix_PlayChannel(-1, sounds[0], 0);
 
-                {
-                    char send[PACKET_SIZE];
-                    sprintf_s(send, sizeof(send), "I am shooting!");
-                    SDLNet_TCP_Send(tcp_server, send, strlen(send) + 1);
-                }
+                tcp_send(tcp_socket, "I am shooting!");
+                // udp_send(udp_socket, packet, address, "I am shooting!");
             }
         }
 
@@ -1174,18 +1218,16 @@ int main(int argc, char *args[])
         SDL_RenderPresent(renderer);
     }
 
-    char send[PACKET_SIZE];
-    sprintf_s(send, sizeof(send), "Goodbye, Server!");
-    SDLNet_TCP_Send(tcp_server, send, strlen(send) + 1);
+    tcp_send(tcp_socket, "Goodbye, Server!");
 
     free(depth_buffer);
     free(pixel_buffer);
 
     SDLNet_FreePacket(packet);
-    SDLNet_UDP_Close(udp_client);
-    SDLNet_TCP_DelSocket(sockets, tcp_server);
+    SDLNet_UDP_Close(udp_socket);
+    SDLNet_TCP_DelSocket(sockets, tcp_socket);
     SDLNet_FreeSocketSet(sockets);
-    SDLNet_TCP_Close(tcp_server);
+    SDLNet_TCP_Close(tcp_socket);
     SDLNet_Quit();
 
     TTF_CloseFont(font);
@@ -1300,7 +1342,7 @@ void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
     }
 }
 
-image_t *images_load(const char *file)
+image_t *load_image(const char *file)
 {
     SDL_Surface *surface = IMG_Load(file);
 

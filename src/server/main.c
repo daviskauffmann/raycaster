@@ -4,23 +4,22 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../shared/net.h"
+#include "../shared/object.h"
 #include "../shared/utils.h"
 
 #define SDL_FLAGS 0
 
 #define SERVER_PORT 1000
 #define MAX_SOCKETS 2
-#define PACKET_SIZE 256
 
-typedef struct tcp_client_s
+typedef struct client_s
 {
     int id;
     TCPsocket socket;
-} tcp_client_t;
+} client_t;
 
-int get_client_id(void);
-
-tcp_client_t tcp_clients[MAX_SOCKETS];
+int get_new_client(client_t clients[MAX_SOCKETS]);
 
 int main(int argc, char *args[])
 {
@@ -28,7 +27,7 @@ int main(int argc, char *args[])
     (void)argc;
     (void)args;
 
-    if (SDL_Init(SDL_FLAGS) == -1)
+    if (SDL_Init(SDL_FLAGS) != 0)
     {
         SDL_Log("SDL_Init: %s", SDL_GetError());
 
@@ -42,28 +41,22 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    IPaddress ip;
+    IPaddress address;
 
-    if (SDLNet_ResolveHost(&ip, NULL, SERVER_PORT) != 0)
+    if (SDLNet_ResolveHost(&address, NULL, SERVER_PORT) != 0)
     {
         SDL_Log("SDLNet_ResolveHost: %s", SDLNet_GetError());
 
         return 1;
     }
 
-    TCPsocket tcp_server = SDLNet_TCP_Open(&ip);
+    TCPsocket tcp_socket = SDLNet_TCP_Open(&address);
 
-    if (!tcp_server)
+    if (!tcp_socket)
     {
         SDL_Log("SDLNet_TCP_Open: %s", SDLNet_GetError());
 
         return 1;
-    }
-
-    for (int i = 0; i < MAX_SOCKETS; i++)
-    {
-        tcp_clients[i].id = -1;
-        tcp_clients[i].socket = NULL;
     }
 
     SDLNet_SocketSet sockets = SDLNet_AllocSocketSet(MAX_SOCKETS);
@@ -77,9 +70,9 @@ int main(int argc, char *args[])
 
     SDL_Log("Listening on port %d", SERVER_PORT);
 
-    UDPsocket udp_server = SDLNet_UDP_Open(SERVER_PORT);
+    UDPsocket udp_socket = SDLNet_UDP_Open(SERVER_PORT);
 
-    if (!udp_server)
+    if (!udp_socket)
     {
         SDL_Log("SDLNet_UDP_Open: %s", SDLNet_GetError());
 
@@ -95,44 +88,50 @@ int main(int argc, char *args[])
         return 1;
     }
 
+    client_t clients[MAX_SOCKETS];
+
+    for (int i = 0; i < MAX_SOCKETS; i++)
+    {
+        clients[i].id = -1;
+        clients[i].socket = NULL;
+    }
+
     bool quit = false;
     while (!quit)
     {
         {
-            TCPsocket client = SDLNet_TCP_Accept(tcp_server);
+            TCPsocket socket = SDLNet_TCP_Accept(tcp_socket);
 
-            if (client)
+            if (socket)
             {
-                int client_id = get_client_id();
+                int client_id = get_new_client(clients);
 
                 if (client_id != -1)
                 {
-                    SDL_Log("Connected to client %s:%i", SDLNet_ResolveIP(&ip), SDLNet_Read16(&ip.port));
+                    IPaddress *client_address = SDLNet_TCP_GetPeerAddress(socket);
+                    const char *client_host = SDLNet_ResolveIP(client_address);
+                    unsigned short client_port = SDLNet_Read16(&client_address->port);
 
-                    tcp_clients[client_id].id = client_id;
-                    tcp_clients[client_id].socket = client;
+                    SDL_Log("Connected to client %s:%d", client_host, client_port);
 
-                    SDLNet_TCP_AddSocket(sockets, client);
+                    clients[client_id].id = client_id;
+                    clients[client_id].socket = socket;
 
-                    {
-                        char send[PACKET_SIZE];
-                        sprintf_s(send, sizeof(send), "Hello, Client!");
-                        SDLNet_TCP_Send(client, send, strlen(send) + 1);
-                    }
+                    SDLNet_TCP_AddSocket(sockets, socket);
+
+                    tcp_send(socket, "Hello, Client!");
 
                     int num_clients = 0;
 
                     for (int i = 0; i < MAX_SOCKETS; i++)
                     {
-                        if (tcp_clients[i].id != -1)
+                        if (clients[i].id != -1)
                         {
                             num_clients++;
 
-                            if (tcp_clients[i].id != client_id)
+                            if (clients[i].id != client_id)
                             {
-                                char send[PACKET_SIZE];
-                                sprintf_s(send, sizeof(send), "A client has connected!");
-                                SDLNet_TCP_Send(tcp_clients[i].socket, send, strlen(send) + 1);
+                                tcp_send(clients[i].socket, "A client has connected! ID: %d", client_id);
                             }
                         }
                     }
@@ -141,73 +140,84 @@ int main(int argc, char *args[])
                 }
                 else
                 {
-                    char send[PACKET_SIZE];
-                    sprintf_s(send, sizeof(send), "Server is full!");
-                    SDLNet_TCP_Send(client, send, strlen(send) + 1);
+                    SDL_Log("Client tried to connect, but server is full");
+
+                    tcp_send(socket, "Server is full!");
                 }
             }
         }
 
+        while (SDLNet_CheckSockets(sockets, 0) > 0)
         {
-            while (SDLNet_CheckSockets(sockets, 0) > 0)
+            for (int i = 0; i < MAX_SOCKETS; i++)
             {
-                for (int i = 0; i < MAX_SOCKETS; i++)
+                if (clients[i].id != -1)
                 {
-                    if (tcp_clients[i].id != -1)
+                    if (SDLNet_SocketReady(clients[i].socket))
                     {
-                        if (SDLNet_SocketReady(tcp_clients[i].socket))
+                        response_t response = tcp_recv(clients[i].socket);
+
+                        if (response.len > 0)
                         {
-                            char recv[PACKET_SIZE];
-                            int bytes = SDLNet_TCP_Recv(tcp_clients[i].socket, recv, sizeof(recv));
-                            if (bytes > 0)
+                            if (strcmp(response.data, "Requesting map!") == 0)
                             {
-                                SDL_Log("Recieved %d bytes: %s", bytes, recv);
+                                tcp_send(clients[i].socket, "Here is the map!");
+                            }
+                            else if (strcmp(response.data, "Goodbye, Server!") == 0)
+                            {
+                                int client_id = clients[i].id;
+                                IPaddress *client_address = SDLNet_TCP_GetPeerAddress(clients[i].socket);
+                                const char *client_host = SDLNet_ResolveIP(client_address);
+                                unsigned short client_port = SDLNet_Read16(&client_address->port);
 
-                                if (strcmp(recv, "Goodbye, Server!") == 0)
+                                SDL_Log("Disconnected from client %s:%d", client_host, client_port);
+
+                                SDLNet_TCP_DelSocket(sockets, clients[i].socket);
+                                SDLNet_TCP_Close(clients[i].socket);
+
+                                clients[i].id = -1;
+                                clients[i].socket = NULL;
+
+                                int num_clients = 0;
+
+                                for (int j = 0; j < MAX_SOCKETS; j++)
                                 {
-                                    SDL_Log("Disconnected from client %s:%i", SDLNet_ResolveIP(&ip), SDLNet_Read16(&ip.port));
-
-                                    SDLNet_TCP_DelSocket(sockets, tcp_clients[i].socket);
-                                    SDLNet_TCP_Close(tcp_clients[i].socket);
-
-                                    tcp_clients[i].id = -1;
-                                    tcp_clients[i].socket = NULL;
-
-                                    int num_clients = 0;
-
-                                    for (int j = 0; j < MAX_SOCKETS; j++)
+                                    if (clients[j].id != -1)
                                     {
-                                        if (tcp_clients[j].id != -1)
-                                        {
-                                            num_clients++;
+                                        num_clients++;
 
-                                            char send[PACKET_SIZE];
-                                            sprintf_s(send, sizeof(send), "A client has disconnected!");
-                                            SDLNet_TCP_Send(tcp_clients[j].socket, send, strlen(send) + 1);
-                                        }
+                                        tcp_send(clients[j].socket, "A client has disconnected! ID: %d", client_id);
                                     }
-
-                                    SDL_Log("There are %d clients connected", num_clients);
                                 }
+
+                                SDL_Log("There are %d clients connected", num_clients);
                             }
                         }
                     }
                 }
             }
         }
+
+        if (udp_recv(udp_socket, packet))
+        {
+        }
+    }
+
+    for (int i = 0; i < MAX_SOCKETS; i++)
+    {
+        if (clients[i].id != -1)
+        {
+            SDLNet_TCP_Close(clients[i].socket);
+
+            clients[i].id = -1;
+            clients[i].socket = NULL;
+        }
     }
 
     SDLNet_FreePacket(packet);
-    SDLNet_UDP_Close(udp_server);
+    SDLNet_UDP_Close(udp_socket);
     SDLNet_FreeSocketSet(sockets);
-    for (int i = 0; i < MAX_SOCKETS; i++)
-    {
-        if (tcp_clients[i].id != -1)
-        {
-            SDLNet_TCP_Close(tcp_clients[i].socket);
-        }
-    }
-    SDLNet_TCP_Close(tcp_server);
+    SDLNet_TCP_Close(tcp_socket);
     SDLNet_Quit();
 
     SDL_Quit();
@@ -215,11 +225,11 @@ int main(int argc, char *args[])
     return 0;
 }
 
-int get_client_id(void)
+int get_new_client(client_t clients[MAX_SOCKETS])
 {
     for (int i = 0; i < MAX_SOCKETS; i++)
     {
-        if (tcp_clients[i].id == -1)
+        if (clients[i].id == -1)
         {
             return i;
         }
