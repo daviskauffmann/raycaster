@@ -10,18 +10,29 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../shared/maths.h"
 #include "../shared/utils.h"
 
-#include "audio.h"
-#include "fonts.h"
-#include "images.h"
-#include "system.h"
-#include "window.h"
+#define SDL_FLAGS SDL_INIT_VIDEO | SDL_INIT_AUDIO
+
+#define WINDOW_TITLE "Raycaster"
+#define SCREEN_X SDL_WINDOWPOS_UNDEFINED
+#define SCREEN_Y SDL_WINDOWPOS_UNDEFINED
+#define SCREEN_WIDTH 320
+#define SCREEN_HEIGHT 200
+#define WINDOW_FLAGS 0
+
+#define IMG_FLAGS IMG_INIT_PNG
+
+#define MIX_FLAGS 0
+#define AUDIO_FREQUENCY 44100
+#define AUDIO_FORMAT MIX_DEFAULT_FORMAT
+#define AUDIO_CHANNELS 2
+#define AUDIO_CHUNK_SIZE 1024
 
 #define SERVER_HOST "127.0.0.1"
 #define SERVER_PORT 1000
 #define CLIENT_PORT 1001
+#define MAX_SOCKETS 1
 #define PACKET_SIZE 256
 
 #define NUM_TEXTURES 8
@@ -48,6 +59,13 @@
 
 #define FOG_STRENGTH 0.5
 
+typedef struct image_s
+{
+    int w;
+    int h;
+    unsigned int *pixels;
+} image_t;
+
 typedef struct object_s
 {
     double x;
@@ -55,136 +73,14 @@ typedef struct object_s
     unsigned char sprite_index;
 } object_t;
 
-void player_move(double dx, double dy);
-void player_rotate(double angle);
+unsigned int get_pixel(SDL_Surface *surface, int x, int y);
+void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
+image_t *images_load(const char *file);
+void player_move(unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT], double *pos_x, double *pos_y, double dx, double dy);
+void player_rotate(double *dir_x, double *dir_y, double *plane_x, double *plane_y, double angle);
 void comb_sort(int *order, double *dist, int amount);
 unsigned int color_darken(unsigned int color);
 unsigned int color_fog(unsigned int color, double distance);
-
-IPaddress ip;
-TCPsocket tcp_server = NULL;
-
-UDPsocket udp_client = NULL;
-UDPpacket *packet = NULL;
-
-unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT] = {
-    {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
-    {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
-    {8, 0, 3, 3, 0, 0, 0, 0, 0, 8, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6},
-    {8, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6},
-    {8, 0, 3, 3, 0, 0, 0, 0, 0, 8, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
-    {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 4, 0, 0, 0, 0, 0, 6, 6, 6, 0, 6, 4, 6},
-    {8, 8, 8, 8, 0, 8, 8, 8, 8, 8, 8, 4, 4, 4, 4, 4, 4, 6, 0, 0, 0, 0, 0, 6},
-    {7, 7, 7, 7, 0, 7, 7, 7, 7, 0, 8, 0, 8, 0, 8, 0, 8, 4, 0, 4, 0, 6, 0, 6},
-    {7, 7, 0, 0, 0, 0, 0, 0, 7, 8, 0, 8, 0, 8, 0, 8, 8, 6, 0, 0, 0, 0, 0, 6},
-    {7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 6, 0, 0, 0, 0, 0, 4},
-    {7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 6, 0, 6, 0, 6, 0, 6},
-    {7, 7, 0, 0, 0, 0, 0, 0, 7, 8, 0, 8, 0, 8, 0, 8, 8, 6, 4, 6, 0, 6, 6, 6},
-    {7, 7, 7, 7, 0, 7, 7, 7, 7, 8, 8, 4, 0, 6, 8, 4, 8, 3, 3, 3, 0, 3, 3, 3},
-    {2, 2, 2, 2, 0, 2, 2, 2, 2, 4, 6, 4, 0, 0, 6, 0, 6, 3, 0, 0, 0, 0, 0, 3},
-    {2, 2, 0, 0, 0, 0, 0, 2, 2, 4, 0, 0, 0, 0, 0, 0, 4, 3, 0, 0, 0, 0, 0, 3},
-    {2, 0, 0, 0, 0, 0, 0, 0, 2, 4, 0, 0, 0, 0, 0, 0, 4, 3, 0, 0, 0, 0, 0, 3},
-    {1, 0, 0, 0, 0, 0, 0, 0, 1, 4, 4, 4, 4, 4, 6, 0, 6, 3, 3, 0, 0, 0, 3, 3},
-    {2, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 1, 2, 2, 2, 6, 6, 0, 0, 5, 0, 5, 0, 5},
-    {2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 2, 2, 0, 5, 0, 5, 0, 0, 0, 5, 5},
-    {2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 5, 0, 5, 0, 5, 0, 5, 0, 5},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5},
-    {2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 5, 0, 5, 0, 5, 0, 5, 0, 5},
-    {2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 2, 2, 0, 5, 0, 5, 0, 0, 0, 5, 5},
-    {2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5}};
-
-unsigned char floor_map[MAP_WIDTH][MAP_HEIGHT] = {
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}};
-
-unsigned char ceiling_map[MAP_WIDTH][MAP_HEIGHT] = {
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6}};
-
-object_t objects[NUM_OBJECTS] = {
-    {20.5, 11.5, 2},
-    {18.5, 4.50, 2},
-    {10.0, 4.50, 2},
-    {10.0, 12.5, 2},
-    {3.50, 6.50, 2},
-    {3.50, 20.5, 2},
-    {3.50, 14.5, 2},
-    {14.5, 20.5, 2},
-    {18.5, 10.5, 1},
-    {18.5, 11.5, 1},
-    {18.5, 12.5, 1},
-    {21.5, 1.50, 0},
-    {15.5, 1.50, 0},
-    {16.0, 1.80, 0},
-    {16.2, 1.20, 0},
-    {3.50, 2.50, 0},
-    {9.50, 15.5, 0},
-    {10.0, 15.1, 0},
-    {10.5, 15.8, 0},
-};
-
-double pos_x = 22.0; // start position
-double pos_y = 11.5;
-double dir_x = -1.0; // direction vector
-double dir_y = 0.0;
-double plane_x = 0.0; // camera plane
-double plane_y = 1.0;
-
-unsigned int previous_time = 0;
-unsigned int current_time = 0;
-
-bool textured = true;
-bool draw_walls = true;
-bool draw_floor = true;
-bool draw_objects = true;
-bool shading = true;
-bool foggy = true;
-
-bool quit = false;
 
 int main(int argc, char *args[])
 {
@@ -192,18 +88,84 @@ int main(int argc, char *args[])
     (void)argc;
     (void)args;
 
-    if (system_init() != 0 ||
-        window_init("Raycaster", 320, 200) != 0 ||
-        images_init() != 0 ||
-        fonts_init() != 0 ||
-        audio_init() != 0)
+    if (SDL_Init(SDL_FLAGS) == -1)
     {
-        SDL_Log("Initialization failed");
+        SDL_Log("SDL_Init: %s", SDL_GetError());
 
         return 1;
     }
 
-    /* Net */
+    SDL_SetRelativeMouseMode(SDL_TRUE);
+
+    SDL_Window *window = SDL_CreateWindow(
+        WINDOW_TITLE,
+        SCREEN_X,
+        SCREEN_Y,
+        SCREEN_WIDTH,
+        SCREEN_HEIGHT,
+        WINDOW_FLAGS);
+
+    if (!window)
+    {
+        SDL_Log("SDL_CreateWindow: %s", SDL_GetError());
+
+        return 1;
+    }
+
+    SDL_Renderer *renderer = SDL_CreateRenderer(
+        window,
+        -1,
+        0);
+
+    if (!renderer)
+    {
+        SDL_Log("SDL_CreateRenderer: %s", SDL_GetError());
+
+        return 1;
+    }
+
+    SDL_Texture *screen = SDL_CreateTexture(
+        renderer,
+        SDL_PIXELFORMAT_ABGR8888,
+        SDL_TEXTUREACCESS_STREAMING,
+        SCREEN_WIDTH,
+        SCREEN_HEIGHT);
+
+    if (!screen)
+    {
+        SDL_Log("SDL_CreateTexture: %s", SDL_GetError());
+
+        return 1;
+    }
+
+    if ((IMG_Init(IMG_FLAGS) & IMG_FLAGS) != IMG_FLAGS)
+    {
+        SDL_Log("IMG_Init: %s", IMG_GetError());
+
+        return 1;
+    }
+
+    if ((Mix_Init(MIX_FLAGS) & MIX_FLAGS) != MIX_FLAGS)
+    {
+        SDL_Log("Mix_Init: %s", Mix_GetError());
+
+        return 1;
+    }
+
+    if (Mix_OpenAudio(AUDIO_FREQUENCY, AUDIO_FORMAT, AUDIO_CHANNELS, AUDIO_CHUNK_SIZE) != 0)
+    {
+        SDL_Log("Mix_OpenAudio: %s", Mix_GetError());
+
+        return 1;
+    }
+
+    if (TTF_Init() != 0)
+    {
+        SDL_Log("TTF_Init: %s", TTF_GetError());
+
+        return 1;
+    }
+
     if (SDLNet_Init() != 0)
     {
         SDL_Log("SDLNet_Init: %s", SDLNet_GetError());
@@ -211,7 +173,8 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    /* TCP */
+    IPaddress ip;
+
     if (SDLNet_ResolveHost(&ip, SERVER_HOST, SERVER_PORT) != 0)
     {
         SDL_Log("SDLNet_ResolveHost: %s", SDLNet_GetError());
@@ -219,30 +182,38 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    tcp_server = SDLNet_TCP_Open(&ip);
+    TCPsocket tcp_server = SDLNet_TCP_Open(&ip);
 
     if (!tcp_server)
     {
         SDL_Log("SDLNet_TCP_Open: %s", SDLNet_GetError());
 
-        // return 1;
-    }
-    else
-    {
-        SDL_Log("Connected to server %s:%i", SDLNet_ResolveIP(&ip), SDLNet_Read16(&ip.port));
+        return 1;
     }
 
-    /* UDP */
-    udp_client = SDLNet_UDP_Open(CLIENT_PORT);
+    SDL_Log("Connected to server %s:%i", SDLNet_ResolveIP(&ip), SDLNet_Read16(&ip.port));
+
+    SDLNet_SocketSet sockets = SDLNet_AllocSocketSet(MAX_SOCKETS);
+
+    if (!sockets)
+    {
+        SDL_Log("SDLNet_AllocSocketSet: %s", SDLNet_GetError());
+
+        return 1;
+    }
+
+    SDLNet_TCP_AddSocket(sockets, tcp_server);
+
+    UDPsocket udp_client = SDLNet_UDP_Open(CLIENT_PORT);
 
     if (!udp_client)
     {
         SDL_Log("SDLNet_UDP_Open: %s", SDLNet_GetError());
 
-        return 1;
+        // return 1;
     }
 
-    packet = SDLNet_AllocPacket(PACKET_SIZE);
+    UDPpacket *packet = SDLNet_AllocPacket(PACKET_SIZE);
 
     if (!packet)
     {
@@ -252,6 +223,12 @@ int main(int argc, char *args[])
     }
 
     packet->address = ip;
+
+    {
+        char send[PACKET_SIZE];
+        sprintf_s(send, sizeof(send), "Hello, Server!");
+        SDLNet_TCP_Send(tcp_server, send, strlen(send) + 1);
+    }
 
     image_t **textures = malloc(NUM_TEXTURES * sizeof(image_t *));
 #if 1
@@ -302,19 +279,152 @@ int main(int argc, char *args[])
     sprites[2] = images_load("assets/images/greenlight.png");
 
     Mix_Music **tracks = malloc(NUM_TRACKS * sizeof(Mix_Music *));
-    tracks[0] = audio_load_music("assets/audio/background.mp3");
+    tracks[0] = Mix_LoadMUS("assets/audio/background.mp3");
 
     Mix_Chunk **sounds = malloc(NUM_SOUNDS * sizeof(Mix_Chunk *));
-    sounds[0] = audio_load_chunk("assets/audio/shoot.wav");
+    sounds[0] = Mix_LoadWAV("assets/audio/shoot.wav");
 
-    TTF_Font *font = fonts_load("assets/fonts/VeraMono.ttf", 24);
+    TTF_Font *font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
 
     // printf("FOV: %f\n", 2 * atan(plane_y) / M_PI * 180.0);
 
-    double *depth_buffer = malloc(w * h * sizeof(double));
+    unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT] = {
+        {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
+        {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
+        {8, 0, 3, 3, 0, 0, 0, 0, 0, 8, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6},
+        {8, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6},
+        {8, 0, 3, 3, 0, 0, 0, 0, 0, 8, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
+        {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 4, 0, 0, 0, 0, 0, 6, 6, 6, 0, 6, 4, 6},
+        {8, 8, 8, 8, 0, 8, 8, 8, 8, 8, 8, 4, 4, 4, 4, 4, 4, 6, 0, 0, 0, 0, 0, 6},
+        {7, 7, 7, 7, 0, 7, 7, 7, 7, 0, 8, 0, 8, 0, 8, 0, 8, 4, 0, 4, 0, 6, 0, 6},
+        {7, 7, 0, 0, 0, 0, 0, 0, 7, 8, 0, 8, 0, 8, 0, 8, 8, 6, 0, 0, 0, 0, 0, 6},
+        {7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 6, 0, 0, 0, 0, 0, 4},
+        {7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 6, 0, 6, 0, 6, 0, 6},
+        {7, 7, 0, 0, 0, 0, 0, 0, 7, 8, 0, 8, 0, 8, 0, 8, 8, 6, 4, 6, 0, 6, 6, 6},
+        {7, 7, 7, 7, 0, 7, 7, 7, 7, 8, 8, 4, 0, 6, 8, 4, 8, 3, 3, 3, 0, 3, 3, 3},
+        {2, 2, 2, 2, 0, 2, 2, 2, 2, 4, 6, 4, 0, 0, 6, 0, 6, 3, 0, 0, 0, 0, 0, 3},
+        {2, 2, 0, 0, 0, 0, 0, 2, 2, 4, 0, 0, 0, 0, 0, 0, 4, 3, 0, 0, 0, 0, 0, 3},
+        {2, 0, 0, 0, 0, 0, 0, 0, 2, 4, 0, 0, 0, 0, 0, 0, 4, 3, 0, 0, 0, 0, 0, 3},
+        {1, 0, 0, 0, 0, 0, 0, 0, 1, 4, 4, 4, 4, 4, 6, 0, 6, 3, 3, 0, 0, 0, 3, 3},
+        {2, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 1, 2, 2, 2, 6, 6, 0, 0, 5, 0, 5, 0, 5},
+        {2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 2, 2, 0, 5, 0, 5, 0, 0, 0, 5, 5},
+        {2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 5, 0, 5, 0, 5, 0, 5, 0, 5},
+        {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5},
+        {2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 5, 0, 5, 0, 5, 0, 5, 0, 5},
+        {2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 2, 2, 0, 5, 0, 5, 0, 0, 0, 5, 5},
+        {2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5}};
+
+    unsigned char floor_map[MAP_WIDTH][MAP_HEIGHT] = {
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}};
+
+    unsigned char ceiling_map[MAP_WIDTH][MAP_HEIGHT] = {
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6}};
+
+    object_t objects[NUM_OBJECTS] = {
+        {20.5, 11.5, 2},
+        {18.5, 4.50, 2},
+        {10.0, 4.50, 2},
+        {10.0, 12.5, 2},
+        {3.50, 6.50, 2},
+        {3.50, 20.5, 2},
+        {3.50, 14.5, 2},
+        {14.5, 20.5, 2},
+        {18.5, 10.5, 1},
+        {18.5, 11.5, 1},
+        {18.5, 12.5, 1},
+        {21.5, 1.50, 0},
+        {15.5, 1.50, 0},
+        {16.0, 1.80, 0},
+        {16.2, 1.20, 0},
+        {3.50, 2.50, 0},
+        {9.50, 15.5, 0},
+        {10.0, 15.1, 0},
+        {10.5, 15.8, 0},
+    };
+
+    double pos_x = 22.0; // start position
+    double pos_y = 11.5;
+    double dir_x = -1.0; // direction vector
+    double dir_y = 0.0;
+    double plane_x = 0.0; // camera plane
+    double plane_y = 1.0;
+
+    unsigned int previous_time = 0;
+    unsigned int current_time = 0;
+
+    bool textured = true;
+    bool draw_walls = true;
+    bool draw_floor = true;
+    bool draw_objects = true;
+    bool shading = true;
+    bool foggy = true;
+
+    unsigned int *pixel_buffer = malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(unsigned int));
+    double *depth_buffer = malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(double));
+
+    bool quit = false;
 
     while (!quit)
     {
+        while (SDLNet_CheckSockets(sockets, 0) > 0)
+        {
+            if (SDLNet_SocketReady(tcp_server))
+            {
+                char recv[PACKET_SIZE];
+                int bytes = SDLNet_TCP_Recv(tcp_server, recv, sizeof(recv));
+                if (bytes > 0)
+                {
+                    SDL_Log("Recieved %d bytes: %s", bytes, recv);
+                }
+            }
+        }
+
         // timing for input and FPS counter
         previous_time = current_time;
         current_time = SDL_GetTicks();
@@ -336,7 +446,7 @@ int main(int argc, char *args[])
                 // the constant value is in radians/second
                 double angle = -mouse_dx / 1000.0 * ROTATE_SENSITIVITY;
 
-                player_rotate(angle);
+                player_rotate(&dir_x, &dir_y, &plane_x, &plane_y, angle);
             }
             break;
             case SDL_KEYDOWN:
@@ -378,29 +488,34 @@ int main(int argc, char *args[])
                 break;
                 case SDLK_1:
                 {
-                    if (audio_playing_music())
+                    if (Mix_PlayingMusic())
                     {
-                        audio_stop_music();
+                        Mix_HaltMusic();
                     }
                     else
                     {
-                        audio_play_music(tracks[0], -1);
+                        Mix_PlayMusic(tracks[0], -1);
                     }
                 }
                 break;
                 case SDLK_2:
                 {
-                    if (audio_playing_music())
+                    if (Mix_PlayingMusic())
                     {
-                        if (audio_paused_music())
+                        if (Mix_PausedMusic())
                         {
-                            audio_resume_music();
+                            Mix_ResumeMusic();
                         }
                         else
                         {
-                            audio_pause_music();
+                            Mix_PauseMusic();
                         }
                     }
+                }
+                break;
+                case SDLK_LALT:
+                {
+                    SDL_SetRelativeMouseMode(!SDL_GetRelativeMouseMode());
                 }
                 break;
                 case SDLK_ESCAPE:
@@ -448,7 +563,7 @@ int main(int argc, char *args[])
             double dx = dir_x * move_speed;
             double dy = dir_y * move_speed;
 
-            player_move(dx, dy);
+            player_move(wall_map, &pos_x, &pos_y, dx, dy);
         }
 
         // strafe left
@@ -457,7 +572,7 @@ int main(int argc, char *args[])
             double dx = -dir_y * move_speed;
             double dy = dir_x * move_speed;
 
-            player_move(dx, dy);
+            player_move(wall_map, &pos_x, &pos_y, dx, dy);
         }
 
         // move backward
@@ -466,7 +581,7 @@ int main(int argc, char *args[])
             double dx = -dir_x * move_speed;
             double dy = -dir_y * move_speed;
 
-            player_move(dx, dy);
+            player_move(wall_map, &pos_x, &pos_y, dx, dy);
         }
 
         // strafe right
@@ -475,7 +590,7 @@ int main(int argc, char *args[])
             double dx = dir_y * move_speed;
             double dy = -dir_x * move_speed;
 
-            player_move(dx, dy);
+            player_move(wall_map, &pos_x, &pos_y, dx, dy);
         }
 
         // calculate rotation angle
@@ -484,12 +599,12 @@ int main(int argc, char *args[])
 
         if (keys[SDL_SCANCODE_Q])
         {
-            player_rotate(angle);
+            player_rotate(&dir_x, &dir_y, &plane_x, &plane_y, angle);
         }
 
         if (keys[SDL_SCANCODE_E])
         {
-            player_rotate(-angle);
+            player_rotate(&dir_x, &dir_y, &plane_x, &plane_y, -angle);
         }
 
         // shooting
@@ -501,9 +616,18 @@ int main(int argc, char *args[])
             {
                 shoot_timer = 0.0;
 
-                audio_play_chunk(sounds[0], 0);
+                Mix_PlayChannel(-1, sounds[0], 0);
+
+                {
+                    char send[PACKET_SIZE];
+                    sprintf_s(send, sizeof(send), "I am shooting!");
+                    SDLNet_TCP_Send(tcp_server, send, strlen(send) + 1);
+                }
             }
         }
+
+        int w = SCREEN_WIDTH;
+        int h = SCREEN_HEIGHT;
 
         // raycasting
         for (int x = 0; x < w; x++)
@@ -511,7 +635,7 @@ int main(int argc, char *args[])
             // clear the pixel and depth buffers
             for (int y = 0; y < h; y++)
             {
-                window_pset(x, y, 0);
+                pixel_buffer[x + y * w] = 0;
                 depth_buffer[x + y * w] = DBL_MAX;
             }
 
@@ -659,7 +783,7 @@ int main(int argc, char *args[])
                         }
 
                         // draw the pixel
-                        window_pset(x, y, color);
+                        pixel_buffer[x + y * w] = color;
                         depth_buffer[x + y * w] = perp_wall_dist;
                     }
                 }
@@ -726,7 +850,7 @@ int main(int argc, char *args[])
                             }
 
                             // draw the pixel
-                            window_pset(x, y, color);
+                            pixel_buffer[x + y * w] = color;
                             depth_buffer[x + y * w] = current_dist;
                         }
 
@@ -754,7 +878,7 @@ int main(int argc, char *args[])
                             }
 
                             // draw the pixel
-                            window_pset(x, h - y, color);
+                            pixel_buffer[x + (h - y) * w] = color;
                             depth_buffer[x + (h - y) * w] = current_dist;
                         }
                     }
@@ -805,7 +929,7 @@ int main(int argc, char *args[])
                     // draw the pixels of the stripe as a vertical line
                     for (int y = draw_start; y <= draw_end; y++)
                     {
-                        window_pset(x, y, color);
+                        pixel_buffer[x + y * w] = color;
                         depth_buffer[x + y * w] = perp_wall_dist;
                     }
                 }
@@ -824,14 +948,14 @@ int main(int argc, char *args[])
                     // draw the floor
                     for (int y = draw_end + 1; y < h; y++)
                     {
-                        window_pset(x, y, floor_color);
+                        pixel_buffer[x + y * w] = floor_color;
                         depth_buffer[x + y * w] = perp_wall_dist;
                     }
 
                     // draw the ceiling
                     for (int y = 0; y < draw_start; y++)
                     {
-                        window_pset(x, y, ceiling_color);
+                        pixel_buffer[x + y * w] = ceiling_color;
                         depth_buffer[x + y * w] = perp_wall_dist;
                     }
                 }
@@ -946,9 +1070,9 @@ int main(int argc, char *args[])
                                 if ((color & 0x00ffffff) != 0)
                                 {
                                     // used for translucency
-                                    // unsigned int previous_color = window_pget(x, y);
+                                    // unsigned int previous_color = pixel_buffer[x + y * w];
 
-                                    window_pset(x, y, color);
+                                    pixel_buffer[x + y * w] = color;
                                     depth_buffer[x + y * w] = transform_y;
                                 }
                             }
@@ -968,135 +1092,267 @@ int main(int argc, char *args[])
             fps = (int)(1 / delta_time);
         }
 
-        window_update();
+        SDL_RenderClear(renderer);
 
-        // // display FPS
-        // {
-        //     int fps_text_len = snprintf(NULL, 0, "FPS: %d", fps);
-        //     char *fps_text_buffer = malloc(fps_text_len + 1);
-        //     sprintf_s(fps_text_buffer, fps_text_len + 1, "FPS: %d", fps);
-        //     SDL_Surface *fps_text_surface = TTF_RenderText_Solid(font, fps_text_buffer, (SDL_Color){255, 255, 255, 255});
-        //     free(fps_text_buffer);
-        //     SDL_Texture *fps_text_texture = SDL_CreateTextureFromSurface(renderer, fps_text_surface);
-        //     SDL_FreeSurface(fps_text_surface);
-        //     SDL_Rect fps_text_rect;
-        //     fps_text_rect.x = 0;
-        //     fps_text_rect.y = 0;
-        //     fps_text_rect.w = 24 * fps_text_len;
-        //     fps_text_rect.h = 25;
-        //     SDL_RenderCopy(renderer, fps_text_texture, NULL, &fps_text_rect);
-        //     SDL_DestroyTexture(fps_text_texture);
-        // }
+        // display pixel buffer
+        SDL_UpdateTexture(
+            screen,
+            NULL,
+            pixel_buffer,
+            w * sizeof(unsigned int));
+        SDL_RenderCopy(renderer, screen, NULL, NULL);
 
-        // // display position
-        // {
-        //     int pos_text_len = snprintf(NULL, 0, "Pos: (%f, %f)", pos_x, pos_y);
-        //     char *pos_text_buffer = malloc(pos_text_len + 1);
-        //     sprintf_s(pos_text_buffer, pos_text_len + 1, "Pos: (%f, %f)", pos_x, pos_y);
-        //     SDL_Surface *pos_text_surface = TTF_RenderText_Solid(font, pos_text_buffer, (SDL_Color){255, 255, 255, 255});
-        //     SDL_Texture *pos_text_texture = SDL_CreateTextureFromSurface(renderer, pos_text_surface);
-        //     SDL_FreeSurface(pos_text_surface);
-        //     SDL_Rect pos_text_rect;
-        //     pos_text_rect.x = 0;
-        //     pos_text_rect.y = 25;
-        //     pos_text_rect.w = 24 * pos_text_len;
-        //     pos_text_rect.h = 25;
-        //     SDL_RenderCopy(renderer, pos_text_texture, NULL, &pos_text_rect);
-        //     SDL_DestroyTexture(pos_text_texture);
-        // }
+        // display FPS
+        {
+            int fps_text_len = snprintf(NULL, 0, "FPS: %d", fps);
+            char *fps_text_buffer = malloc(fps_text_len + 1);
+            sprintf_s(fps_text_buffer, fps_text_len + 1, "FPS: %d", fps);
+            SDL_Surface *fps_text_surface = TTF_RenderText_Solid(font, fps_text_buffer, (SDL_Color){255, 255, 255, 255});
+            free(fps_text_buffer);
+            SDL_Texture *fps_text_texture = SDL_CreateTextureFromSurface(renderer, fps_text_surface);
+            SDL_FreeSurface(fps_text_surface);
+            SDL_Rect fps_text_rect;
+            fps_text_rect.x = 0;
+            fps_text_rect.y = 0;
+            fps_text_rect.w = 24 * fps_text_len;
+            fps_text_rect.h = 25;
+            SDL_RenderCopy(renderer, fps_text_texture, NULL, &fps_text_rect);
+            SDL_DestroyTexture(fps_text_texture);
+        }
 
-        // // display direction
-        // {
-        //     int dir_text_len = snprintf(NULL, 0, "Dir: (%f, %f)", dir_x, dir_y);
-        //     char *dir_text_buffer = malloc(dir_text_len + 1);
-        //     sprintf_s(dir_text_buffer, dir_text_len + 1, "Dir: (%f, %f)", dir_x, dir_y);
-        //     SDL_Surface *dir_text_surface = TTF_RenderText_Solid(font, dir_text_buffer, (SDL_Color){255, 255, 255, 255});
-        //     SDL_Texture *dir_text_texture = SDL_CreateTextureFromSurface(renderer, dir_text_surface);
-        //     SDL_FreeSurface(dir_text_surface);
-        //     SDL_Rect dir_text_rect;
-        //     dir_text_rect.x = 0;
-        //     dir_text_rect.y = 50;
-        //     dir_text_rect.w = 24 * dir_text_len;
-        //     dir_text_rect.h = 25;
-        //     SDL_RenderCopy(renderer, dir_text_texture, NULL, &dir_text_rect);
-        //     SDL_DestroyTexture(dir_text_texture);
-        // }
+        // display position
+        {
+            int pos_text_len = snprintf(NULL, 0, "Pos: (%f, %f)", pos_x, pos_y);
+            char *pos_text_buffer = malloc(pos_text_len + 1);
+            sprintf_s(pos_text_buffer, pos_text_len + 1, "Pos: (%f, %f)", pos_x, pos_y);
+            SDL_Surface *pos_text_surface = TTF_RenderText_Solid(font, pos_text_buffer, (SDL_Color){255, 255, 255, 255});
+            SDL_Texture *pos_text_texture = SDL_CreateTextureFromSurface(renderer, pos_text_surface);
+            SDL_FreeSurface(pos_text_surface);
+            SDL_Rect pos_text_rect;
+            pos_text_rect.x = 0;
+            pos_text_rect.y = 25;
+            pos_text_rect.w = 24 * pos_text_len;
+            pos_text_rect.h = 25;
+            SDL_RenderCopy(renderer, pos_text_texture, NULL, &pos_text_rect);
+            SDL_DestroyTexture(pos_text_texture);
+        }
 
-        // // display camera plane
-        // {
-        //     int plane_text_len = snprintf(NULL, 0, "Plane: (%f, %f)", plane_x, plane_y);
-        //     char *plane_text_buffer = malloc(plane_text_len + 1);
-        //     sprintf_s(plane_text_buffer, plane_text_len + 1, "Plane: (%f, %f)", plane_x, plane_y);
-        //     SDL_Surface *plane_text_surface = TTF_RenderText_Solid(font, plane_text_buffer, (SDL_Color){255, 255, 255, 255});
-        //     SDL_Texture *plane_text_texture = SDL_CreateTextureFromSurface(renderer, plane_text_surface);
-        //     SDL_FreeSurface(plane_text_surface);
-        //     SDL_Rect plane_text_rect;
-        //     plane_text_rect.x = 0;
-        //     plane_text_rect.y = 75;
-        //     plane_text_rect.w = 24 * plane_text_len;
-        //     plane_text_rect.h = 25;
-        //     SDL_RenderCopy(renderer, plane_text_texture, NULL, &plane_text_rect);
-        //     SDL_DestroyTexture(plane_text_texture);
-        // }
+        // display direction
+        {
+            int dir_text_len = snprintf(NULL, 0, "Dir: (%f, %f)", dir_x, dir_y);
+            char *dir_text_buffer = malloc(dir_text_len + 1);
+            sprintf_s(dir_text_buffer, dir_text_len + 1, "Dir: (%f, %f)", dir_x, dir_y);
+            SDL_Surface *dir_text_surface = TTF_RenderText_Solid(font, dir_text_buffer, (SDL_Color){255, 255, 255, 255});
+            SDL_Texture *dir_text_texture = SDL_CreateTextureFromSurface(renderer, dir_text_surface);
+            SDL_FreeSurface(dir_text_surface);
+            SDL_Rect dir_text_rect;
+            dir_text_rect.x = 0;
+            dir_text_rect.y = 50;
+            dir_text_rect.w = 24 * dir_text_len;
+            dir_text_rect.h = 25;
+            SDL_RenderCopy(renderer, dir_text_texture, NULL, &dir_text_rect);
+            SDL_DestroyTexture(dir_text_texture);
+        }
+
+        // display camera plane
+        {
+            int plane_text_len = snprintf(NULL, 0, "Plane: (%f, %f)", plane_x, plane_y);
+            char *plane_text_buffer = malloc(plane_text_len + 1);
+            sprintf_s(plane_text_buffer, plane_text_len + 1, "Plane: (%f, %f)", plane_x, plane_y);
+            SDL_Surface *plane_text_surface = TTF_RenderText_Solid(font, plane_text_buffer, (SDL_Color){255, 255, 255, 255});
+            SDL_Texture *plane_text_texture = SDL_CreateTextureFromSurface(renderer, plane_text_surface);
+            SDL_FreeSurface(plane_text_surface);
+            SDL_Rect plane_text_rect;
+            plane_text_rect.x = 0;
+            plane_text_rect.y = 75;
+            plane_text_rect.w = 24 * plane_text_len;
+            plane_text_rect.h = 25;
+            SDL_RenderCopy(renderer, plane_text_texture, NULL, &plane_text_rect);
+            SDL_DestroyTexture(plane_text_texture);
+        }
+
+        SDL_RenderPresent(renderer);
     }
+
+    char send[PACKET_SIZE];
+    sprintf_s(send, sizeof(send), "Goodbye, Server!");
+    SDLNet_TCP_Send(tcp_server, send, strlen(send) + 1);
+
+    free(depth_buffer);
+    free(pixel_buffer);
 
     SDLNet_FreePacket(packet);
     SDLNet_UDP_Close(udp_client);
-
+    SDLNet_TCP_DelSocket(sockets, tcp_server);
+    SDLNet_FreeSocketSet(sockets);
     SDLNet_TCP_Close(tcp_server);
     SDLNet_Quit();
 
-    fonts_unload(font);
+    TTF_CloseFont(font);
+    TTF_Quit();
 
     for (int i = 0; i < NUM_TRACKS; i++)
     {
-        audio_unload_music(tracks[i]);
+        Mix_FreeMusic(tracks[i]);
     }
     for (int i = 0; i < NUM_SOUNDS; i++)
     {
-        audio_unload_chunk(sounds[i]);
+        Mix_FreeChunk(sounds[i]);
     }
+    Mix_CloseAudio();
+    Mix_Quit();
 
     for (int i = 0; i < NUM_TEXTURES; i++)
     {
-        images_unload(textures[i]);
+        free(textures[i]->pixels);
+        free(textures[i]);
     }
+    for (int i = 0; i < NUM_SPRITES; i++)
+    {
+        free(sprites[i]->pixels);
+        free(sprites[i]);
+    }
+    IMG_Quit();
 
-    free(depth_buffer);
+    SDL_DestroyTexture(screen);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
 
-    audio_quit();
-    fonts_quit();
-    images_quit();
-    window_close();
+    SDL_Quit();
 
     return 0;
 }
 
-void player_move(double dx, double dy)
+unsigned int get_pixel(SDL_Surface *surface, int x, int y)
 {
-    if (wall_map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
+    int bpp = surface->format->BytesPerPixel;
+    unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
+
+    switch (bpp)
     {
-        pos_x += dx;
+    case 1:
+    {
+        return *p;
     }
-    if (wall_map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
+    break;
+    case 2:
     {
-        pos_y += dy;
+        return *(unsigned short *)p;
+    }
+    break;
+    case 3:
+    {
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+        return p[0] << 16 | p[1] << 8 | p[2];
+#else
+        return p[0] | p[1] << 8 | p[2] << 16;
+#endif
+    }
+    break;
+    case 4:
+    {
+        return *(unsigned int *)p;
+    }
+    break;
+    default:
+    {
+        return 0;
+    }
+    break;
     }
 }
 
-void player_rotate(double angle)
+void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
+{
+    int bpp = surface->format->BytesPerPixel;
+    unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
+
+    switch (bpp)
+    {
+    case 1:
+    {
+        *p = (unsigned char)pixel;
+    }
+    break;
+    case 2:
+    {
+        *(unsigned short *)p = (unsigned short)pixel;
+    }
+    break;
+    case 3:
+    {
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+        p[0] = (pixel >> 16) & 0xff;
+        p[1] = (pixel >> 8) & 0xff;
+        p[2] = pixel & 0xff;
+#else
+        p[0] = pixel & 0xff;
+        p[1] = (pixel >> 8) & 0xff;
+        p[2] = (pixel >> 16) & 0xff;
+#endif
+    }
+    break;
+    case 4:
+    {
+        *(unsigned int *)p = pixel;
+    }
+    break;
+    }
+}
+
+image_t *images_load(const char *file)
+{
+    SDL_Surface *surface = IMG_Load(file);
+
+    if (!surface)
+    {
+        SDL_Log("IMG_Load: %s", IMG_GetError());
+
+        return NULL;
+    }
+
+    image_t *image = malloc(sizeof(image_t));
+    image->w = surface->w;
+    image->h = surface->h;
+    image->pixels = malloc(image->w * image->h * sizeof(unsigned int));
+    for (int x = 0; x < image->w; x++)
+    {
+        for (int y = 0; y < image->h; y++)
+        {
+            image->pixels[x + y * image->w] = get_pixel(surface, x, y);
+        }
+    }
+
+    SDL_FreeSurface(surface);
+
+    return image;
+}
+
+void player_move(unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT], double *pos_x, double *pos_y, double dx, double dy)
+{
+    if (wall_map[(int)(*pos_x + dx)][(int)(*pos_y)] == 0)
+    {
+        *pos_x += dx;
+    }
+    if (wall_map[(int)(*pos_x)][(int)(*pos_y + dy)] == 0)
+    {
+        *pos_y += dy;
+    }
+}
+
+void player_rotate(double *dir_x, double *dir_y, double *plane_x, double *plane_y, double angle)
 {
     double rot_x = cos(angle);
     double rot_y = sin(angle);
 
     // both camera direction and camera plane must be rotated
-    double old_dir_x = dir_x;
-    dir_x = dir_x * rot_x - dir_y * rot_y;
-    dir_y = old_dir_x * rot_y + dir_y * rot_x;
+    double old_dir_x = *dir_x;
+    *dir_x = *dir_x * rot_x - *dir_y * rot_y;
+    *dir_y = old_dir_x * rot_y + *dir_y * rot_x;
 
-    double old_plane_x = plane_x;
-    plane_x = plane_x * rot_x - plane_y * rot_y;
-    plane_y = old_plane_x * rot_y + plane_y * rot_x;
+    double old_plane_x = *plane_x;
+    *plane_x = *plane_x * rot_x - *plane_y * rot_y;
+    *plane_y = old_plane_x * rot_y + *plane_y * rot_x;
 }
 
 void comb_sort(int *order, double *dist, int amount)
@@ -1138,7 +1394,6 @@ void comb_sort(int *order, double *dist, int amount)
 
 unsigned int color_darken(unsigned int color)
 {
-    // darken the color
     return (color >> 1) & 0x7f7f7f;
 }
 
