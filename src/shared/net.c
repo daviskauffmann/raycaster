@@ -5,6 +5,24 @@
 #include <string.h>
 
 #include "net.h"
+#include "utils.h"
+
+TCPpacket *_SDLNet_TCP_AllocPacket(int size)
+{
+    TCPpacket *packet = malloc(sizeof(TCPpacket));
+
+    packet->maxlen = size;
+    packet->data = malloc(size * sizeof(unsigned char));
+    packet->len = -1;
+
+    return packet;
+}
+
+void _SDLNet_TCP_FreePacket(TCPpacket *packet)
+{
+    free(packet->data);
+    free(packet);
+}
 
 void tcp_send(TCPsocket socket, const char *fmt, ...)
 {
@@ -26,36 +44,38 @@ void tcp_send(TCPsocket socket, const char *fmt, ...)
     SDLNet_TCP_Send(socket, data, len);
 }
 
-response_t tcp_recv(TCPsocket socket)
+int tcp_recv(TCPsocket socket, TCPpacket *packet)
 {
-    response_t response;
+    int len = SDLNet_TCP_Recv(socket, packet->data, packet->maxlen);
 
-    response.len = SDLNet_TCP_Recv(socket, response.data, sizeof(response.data));
-
-    if (response.len > 0)
+    if (len > 0)
     {
+        packet->len = len;
+
         IPaddress *address = SDLNet_TCP_GetPeerAddress(socket);
         const char *host = SDLNet_ResolveIP(address);
         unsigned short port = SDLNet_Read16(&address->port);
 
-        SDL_Log("TCP: Received %d bytes from %s:%d: %s", response.len, host, port, response.data);
+        SDL_Log("TCP: Received %d bytes from %s:%d: %s", packet->len, host, port, packet->data);
+
+        return packet->len;
     }
 
-    return response;
+    return 0;
 }
 
 void udp_send(UDPsocket socket, UDPpacket *packet, IPaddress address, const char *fmt, ...)
 {
-    char buffer[PACKET_SIZE];
+    char data[PACKET_SIZE];
 
     va_list args;
     va_start(args, fmt);
-    vsprintf_s(buffer, sizeof(buffer), fmt, args);
+    vsprintf_s(data, sizeof(data), fmt, args);
     va_end(args);
 
     packet->address = address;
-    packet->data = (unsigned char *)buffer;
-    packet->len = strlen(buffer) + 1;
+    packet->data = (unsigned char *)data;
+    packet->len = strlen(data) + 1;
 
     const char *host = SDLNet_ResolveIP(&packet->address);
     unsigned short port = SDLNet_Read16(&packet->address.port);
@@ -67,15 +87,17 @@ void udp_send(UDPsocket socket, UDPpacket *packet, IPaddress address, const char
 
 int udp_recv(UDPsocket socket, UDPpacket *packet)
 {
-    int res = SDLNet_UDP_Recv(socket, packet);
+    int recv = SDLNet_UDP_Recv(socket, packet);
 
-    if (res > 0)
+    if (recv > 0)
     {
         const char *host = SDLNet_ResolveIP(&packet->address);
         unsigned short port = SDLNet_Read16(&packet->address.port);
 
         SDL_Log("UDP: Received %d bytes from %s:%i: %s", packet->len, host, port, packet->data);
+
+        return packet->len;
     }
 
-    return res;
+    return 0;
 }

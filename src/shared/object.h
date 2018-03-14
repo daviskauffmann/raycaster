@@ -1,11 +1,11 @@
 #ifndef OBJECT_H
 #define OBJECT_H
 
-typedef struct object_s
+typedef struct
 {
     double x;
     double y;
     unsigned char sprite_index;
-} object_t;
+} Object;
 
 #endif

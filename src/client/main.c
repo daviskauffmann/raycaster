@@ -65,16 +65,16 @@
 
 #define FOG_STRENGTH 0.5
 
-typedef struct image_s
+typedef struct
 {
     int w;
     int h;
     unsigned int *pixels;
-} image_t;
+} Image;
 
 unsigned int get_pixel(SDL_Surface *surface, int x, int y);
 void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
-image_t *load_image(const char *file);
+Image *load_image(const char *file);
 void player_move(unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT], double *pos_x, double *pos_y, double dx, double dy);
 void player_rotate(double *dir_x, double *dir_y, double *plane_x, double *plane_y, double angle);
 void comb_sort(int *order, double *dist, int amount);
@@ -189,55 +189,26 @@ int main(int argc, char *args[])
 
         return 1;
     }
-    else
+
+    TCPpacket *tcp_packet = SDLNet_TCP_AllocPacket(PACKET_SIZE);
+
+    if (!tcp_packet)
     {
-        SDL_Log("Connected to server %s:%i", SDLNet_ResolveIP(&address), SDLNet_Read16(&address.port));
+        SDL_Log("SDLNet_TCP_AllocPacket: %s", SDLNet_GetError());
 
-        // check if the server is full
-        {
-            tcp_send(tcp_socket, "Hello, Server!");
-
-            response_t response = tcp_recv(tcp_socket);
-
-            if (response.len > 0)
-            {
-                if (strcmp(response.data, "Server is full!") == 0)
-                {
-                    return 1;
-                }
-            }
-        }
-
-        // get map data
-        {
-            tcp_send(tcp_socket, "Requesting map!");
-
-            response_t response = tcp_recv(tcp_socket);
-
-            if (response.len > 0)
-            {
-                if (strcmp(response.data, "Here is the map!") == 0)
-                {
-                    // TODO: do something with the response data
-                }
-                else
-                {
-                    return 1;
-                }
-            }
-        }
+        return 1;
     }
 
-    SDLNet_SocketSet sockets = SDLNet_AllocSocketSet(MAX_SOCKETS);
+    SDLNet_SocketSet tcp_sockets = SDLNet_AllocSocketSet(MAX_SOCKETS);
 
-    if (!sockets)
+    if (!tcp_sockets)
     {
         SDL_Log("SDLNet_AllocSocketSet: %s", SDLNet_GetError());
 
         return 1;
     }
 
-    SDLNet_TCP_AddSocket(sockets, tcp_socket);
+    SDLNet_TCP_AddSocket(tcp_sockets, tcp_socket);
 
     UDPsocket udp_socket = SDLNet_UDP_Open(0);
 
@@ -248,16 +219,43 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    UDPpacket *packet = SDLNet_AllocPacket(PACKET_SIZE);
+    UDPpacket *udp_packet = SDLNet_UDP_AllocPacket(PACKET_SIZE);
 
-    if (!packet)
+    if (!udp_packet)
     {
-        SDL_Log("SDLNet_AllocPacket: %s", SDLNet_GetError());
+        SDL_Log("SDLNet_UDP_AllocPacket: %s", SDLNet_GetError());
 
         return 1;
     }
 
-    image_t **textures = malloc(NUM_TEXTURES * sizeof(image_t *));
+    SDL_Log("Connected to server %s:%i", SDLNet_ResolveIP(&address), SDLNet_Read16(&address.port));
+
+    // check if the server is full
+    {
+        tcp_send(tcp_socket, "Hello, Server!");
+
+        if (tcp_recv(tcp_socket, tcp_packet) > 0)
+        {
+            if (strcmp((const char *)tcp_packet->data, "Server is full!") == 0)
+            {
+                return 1;
+            }
+        }
+    }
+
+    // TODO: make UDP connection
+
+    // get map data
+    {
+        tcp_send(tcp_socket, "Requesting map!");
+
+        if (tcp_recv(tcp_socket, tcp_packet) > 0)
+        {
+            // TODO: do something with the map data
+        }
+    }
+
+    Image **textures = malloc(NUM_TEXTURES * sizeof(Image *));
 #if 1
     textures[0] = load_image("assets/images/eagle.png");
     textures[1] = load_image("assets/images/redbrick.png");
@@ -273,7 +271,7 @@ int main(int argc, char *args[])
 
     for (int i = 0; i < NUM_TEXTURES; i++)
     {
-        textures[i] = malloc(sizeof(image_t));
+        textures[i] = malloc(sizeof(Image));
         textures[i]->w = TEXTURE_WIDTH;
         textures[i]->h = TEXTURE_HEIGHT;
         textures[i]->pixels = malloc(textures[i]->w * textures[i]->h * sizeof(unsigned int));
@@ -300,7 +298,7 @@ int main(int argc, char *args[])
     }
 #endif
 
-    image_t **sprites = malloc(NUM_SPRITES * sizeof(image_t));
+    Image **sprites = malloc(NUM_SPRITES * sizeof(Image));
     sprites[0] = load_image("assets/images/barrel.png");
     sprites[1] = load_image("assets/images/pillar.png");
     sprites[2] = load_image("assets/images/greenlight.png");
@@ -393,7 +391,7 @@ int main(int argc, char *args[])
         {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
         {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6}};
 
-    object_t objects[NUM_OBJECTS] = {
+    Object objects[NUM_OBJECTS] = {
         {20.5, 11.5, 2},
         {18.5, 4.50, 2},
         {10.0, 4.50, 2},
@@ -439,19 +437,17 @@ int main(int argc, char *args[])
 
     while (!quit)
     {
-        while (SDLNet_CheckSockets(sockets, 0) > 0)
+        if (SDLNet_CheckSockets(tcp_sockets, 0) > 0)
         {
             if (SDLNet_SocketReady(tcp_socket))
             {
-                response_t response = tcp_recv(tcp_socket);
-
-                if (response.len > 0)
+                if (tcp_recv(tcp_socket, tcp_packet) > 0)
                 {
                 }
             }
         }
 
-        if (udp_recv(udp_socket, packet))
+        if (udp_recv(udp_socket, udp_packet) > 0)
         {
         }
 
@@ -666,7 +662,7 @@ int main(int argc, char *args[])
                 Mix_PlayChannel(-1, sounds[0], 0);
 
                 tcp_send(tcp_socket, "I am shooting!");
-                // udp_send(udp_socket, packet, address, "I am shooting!");
+                // udp_send(udp_socket, udp_packet, address, "I am shooting!");
             }
         }
 
@@ -794,7 +790,7 @@ int main(int argc, char *args[])
                 {
                     // choose a texture
                     int texture_index = wall_map[map_x][map_y] - 1;
-                    image_t *texture = textures[texture_index];
+                    Image *texture = textures[texture_index];
 
                     // x coordinate on the texture
                     int texture_x = (int)(wall_x * texture->w);
@@ -879,7 +875,7 @@ int main(int argc, char *args[])
                         {
                             // choose a texture
                             int texture_index = floor_map[(int)current_x][(int)current_y];
-                            image_t *texture = textures[texture_index];
+                            Image *texture = textures[texture_index];
 
                             // x, y coordinate of the texture
                             int texture_x = (int)(current_x * texture->w / FLOOR_TEXTURE_MULT) % texture->w;
@@ -902,7 +898,7 @@ int main(int argc, char *args[])
                         {
                             // choose a texture
                             int texture_index = ceiling_map[(int)current_x][(int)current_y];
-                            image_t *texture = textures[texture_index];
+                            Image *texture = textures[texture_index];
 
                             // x, y coordinate of the texture
                             int texture_x = (int)(current_x * texture->w / CEILING_TEXTURE_MULT) % texture->w;
@@ -1023,7 +1019,7 @@ int main(int argc, char *args[])
             // after sorting the objects, do the projection and draw them
             for (int i = 0; i < NUM_OBJECTS; i++)
             {
-                object_t object = objects[object_order[i]];
+                Object object = objects[object_order[i]];
 
                 // translate object position to relative to camera
                 double object_x = object.x - pos_x;
@@ -1080,7 +1076,7 @@ int main(int argc, char *args[])
 
                 // choose the sprite
                 int sprite_index = object.sprite_index;
-                image_t *sprite = sprites[sprite_index];
+                Image *sprite = sprites[sprite_index];
 
                 // loop through every vertical stripe of the sprite on screen
                 for (int x = draw_start_x; x < draw_end_x; x++)
@@ -1223,10 +1219,11 @@ int main(int argc, char *args[])
     free(depth_buffer);
     free(pixel_buffer);
 
-    SDLNet_FreePacket(packet);
+    SDLNet_UDP_FreePacket(udp_packet);
     SDLNet_UDP_Close(udp_socket);
-    SDLNet_TCP_DelSocket(sockets, tcp_socket);
-    SDLNet_FreeSocketSet(sockets);
+    SDLNet_TCP_DelSocket(tcp_sockets, tcp_socket);
+    SDLNet_FreeSocketSet(tcp_sockets);
+    SDLNet_TCP_FreePacket(tcp_packet);
     SDLNet_TCP_Close(tcp_socket);
     SDLNet_Quit();
 
@@ -1342,7 +1339,7 @@ void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
     }
 }
 
-image_t *load_image(const char *file)
+Image *load_image(const char *file)
 {
     SDL_Surface *surface = IMG_Load(file);
 
@@ -1353,7 +1350,7 @@ image_t *load_image(const char *file)
         return NULL;
     }
 
-    image_t *image = malloc(sizeof(image_t));
+    Image *image = malloc(sizeof(Image));
     image->w = surface->w;
     image->h = surface->h;
     image->pixels = malloc(image->w * image->h * sizeof(unsigned int));

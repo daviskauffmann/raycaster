@@ -59,9 +59,18 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    SDLNet_SocketSet sockets = SDLNet_AllocSocketSet(MAX_SOCKETS);
+    TCPpacket *tcp_packet = SDLNet_TCP_AllocPacket(PACKET_SIZE);
 
-    if (!sockets)
+    if (!tcp_packet)
+    {
+        SDL_Log("SDLNet_TCP_AllocPacket: %s", SDLNet_GetError());
+
+        return 1;
+    }
+
+    SDLNet_SocketSet tcp_sockets = SDLNet_AllocSocketSet(MAX_SOCKETS);
+
+    if (!tcp_sockets)
     {
         SDL_Log("SDLNet_AllocSocketSet: %s", SDLNet_GetError());
 
@@ -79,11 +88,11 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    UDPpacket *packet = SDLNet_AllocPacket(PACKET_SIZE);
+    UDPpacket *udp_packet = SDLNet_UDP_AllocPacket(PACKET_SIZE);
 
-    if (!packet)
+    if (!udp_packet)
     {
-        SDL_Log("SDLNet_AllocPacket: %s", SDLNet_GetError());
+        SDL_Log("SDLNet_UDP_AllocPacket: %s", SDLNet_GetError());
 
         return 1;
     }
@@ -99,6 +108,7 @@ int main(int argc, char *args[])
     bool quit = false;
     while (!quit)
     {
+        // accept new clients
         {
             TCPsocket socket = SDLNet_TCP_Accept(tcp_socket);
 
@@ -117,7 +127,7 @@ int main(int argc, char *args[])
                     clients[client_id].id = client_id;
                     clients[client_id].socket = socket;
 
-                    SDLNet_TCP_AddSocket(sockets, socket);
+                    SDLNet_TCP_AddSocket(tcp_sockets, socket);
 
                     tcp_send(socket, "Hello, Client!");
 
@@ -147,7 +157,8 @@ int main(int argc, char *args[])
             }
         }
 
-        while (SDLNet_CheckSockets(sockets, 0) > 0)
+        // handle TCP messages
+        if (SDLNet_CheckSockets(tcp_sockets, 0) > 0)
         {
             for (int i = 0; i < MAX_SOCKETS; i++)
             {
@@ -155,15 +166,26 @@ int main(int argc, char *args[])
                 {
                     if (SDLNet_SocketReady(clients[i].socket))
                     {
-                        response_t response = tcp_recv(clients[i].socket);
-
-                        if (response.len > 0)
+                        if (tcp_recv(clients[i].socket, tcp_packet) > 0)
                         {
-                            if (strcmp(response.data, "Requesting map!") == 0)
+                            // TEST: sending large data
+                            if (strcmp((const char *)tcp_packet->data, "Requesting map!") == 0)
                             {
-                                tcp_send(clients[i].socket, "Here is the map!");
+                                tcp_send(clients[i].socket, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.");
                             }
-                            else if (strcmp(response.data, "Goodbye, Server!") == 0)
+                            // TEST: relaying message to all clients
+                            else if (strcmp((const char *)udp_packet->data, "I am shooting!") == 0)
+                            {
+                                for (int j = 0; j < MAX_SOCKETS; j++)
+                                {
+                                    if (clients[j].id != -1)
+                                    {
+                                        tcp_send(clients[j].socket, "Someone is shooting!");
+                                    }
+                                }
+                            }
+                            // handle client disconnect
+                            else if (strcmp((const char *)tcp_packet->data, "Goodbye, Server!") == 0)
                             {
                                 int client_id = clients[i].id;
                                 IPaddress *client_address = SDLNet_TCP_GetPeerAddress(clients[i].socket);
@@ -172,7 +194,7 @@ int main(int argc, char *args[])
 
                                 SDL_Log("Disconnected from client %s:%d", client_host, client_port);
 
-                                SDLNet_TCP_DelSocket(sockets, clients[i].socket);
+                                SDLNet_TCP_DelSocket(tcp_sockets, clients[i].socket);
                                 SDLNet_TCP_Close(clients[i].socket);
 
                                 clients[i].id = -1;
@@ -198,15 +220,19 @@ int main(int argc, char *args[])
             }
         }
 
-        if (udp_recv(udp_socket, packet))
+        // handle UDP messages
+        while (udp_recv(udp_socket, udp_packet) > 0)
         {
         }
+
+        SDL_Delay(100);
     }
 
     for (int i = 0; i < MAX_SOCKETS; i++)
     {
         if (clients[i].id != -1)
         {
+            SDLNet_TCP_DelSocket(tcp_sockets, clients[i].socket);
             SDLNet_TCP_Close(clients[i].socket);
 
             clients[i].id = -1;
@@ -214,9 +240,10 @@ int main(int argc, char *args[])
         }
     }
 
-    SDLNet_FreePacket(packet);
+    SDLNet_UDP_FreePacket(udp_packet);
     SDLNet_UDP_Close(udp_socket);
-    SDLNet_FreeSocketSet(sockets);
+    SDLNet_FreeSocketSet(tcp_sockets);
+    SDLNet_TCP_FreePacket(tcp_packet);
     SDLNet_TCP_Close(tcp_socket);
     SDLNet_Quit();
 
