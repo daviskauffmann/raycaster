@@ -607,6 +607,8 @@ int main(int argc, char *args[])
             double dy = dir_y * move_speed;
 
             player_move(wall_map, &pos_x, &pos_y, dx, dy);
+
+            udp_send(udp_socket, udp_packet, address, "I am moving!");
         }
 
         // strafe left
@@ -616,6 +618,8 @@ int main(int argc, char *args[])
             double dy = dir_x * move_speed;
 
             player_move(wall_map, &pos_x, &pos_y, dx, dy);
+
+            udp_send(udp_socket, udp_packet, address, "I am moving!");
         }
 
         // move backward
@@ -625,6 +629,8 @@ int main(int argc, char *args[])
             double dy = -dir_y * move_speed;
 
             player_move(wall_map, &pos_x, &pos_y, dx, dy);
+
+            udp_send(udp_socket, udp_packet, address, "I am moving!");
         }
 
         // strafe right
@@ -634,6 +640,8 @@ int main(int argc, char *args[])
             double dy = -dir_x * move_speed;
 
             player_move(wall_map, &pos_x, &pos_y, dx, dy);
+
+            udp_send(udp_socket, udp_packet, address, "I am moving!");
         }
 
         // calculate rotation angle
@@ -661,8 +669,7 @@ int main(int argc, char *args[])
 
                 Mix_PlayChannel(-1, sounds[0], 0);
 
-                tcp_send(tcp_socket, "I am shooting!");
-                // udp_send(udp_socket, udp_packet, address, "I am shooting!");
+                udp_send(udp_socket, udp_packet, address, "I am shooting!");
             }
         }
 

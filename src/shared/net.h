@@ -10,12 +10,6 @@
 #define SDLNet_UDP_AllocPacket(size) SDLNet_AllocPacket(size)
 #define SDLNet_UDP_FreePacket(packet) SDLNet_FreePacket(packet)
 
-typedef enum
-{
-    PACKET_STR,
-    PACKET_2DA
-} PacketType;
-
 typedef struct
 {
     int maxlen;
