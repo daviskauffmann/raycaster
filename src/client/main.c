@@ -12,7 +12,6 @@
 
 #include "../shared/map.h"
 #include "../shared/net.h"
-#include "../shared/object.h"
 #include "../shared/util.h"
 
 #define SDL_FLAGS SDL_INIT_VIDEO | SDL_INIT_AUDIO

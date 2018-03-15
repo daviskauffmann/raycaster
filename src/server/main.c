@@ -6,7 +6,6 @@
 
 #include "../shared/map.h"
 #include "../shared/net.h"
-#include "../shared/object.h"
 #include "../shared/util.h"
 
 #define SDL_FLAGS 0
