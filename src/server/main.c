@@ -4,9 +4,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../shared/map.h"
 #include "../shared/net.h"
 #include "../shared/object.h"
-#include "../shared/utils.h"
+#include "../shared/util.h"
 
 #define SDL_FLAGS 0
 
@@ -14,13 +15,13 @@
 #define MAX_SOCKETS 2
 
 // TODO: handle timeouts on clients to automatically disconnect them
-typedef struct client_s
+typedef struct
 {
     int id;
     TCPsocket socket;
-} client_t;
+} Client;
 
-int get_new_client(client_t clients[MAX_SOCKETS]);
+int get_new_client(Client clients[MAX_SOCKETS]);
 
 int main(int argc, char *args[])
 {
@@ -98,7 +99,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    client_t clients[MAX_SOCKETS];
+    Client clients[MAX_SOCKETS];
 
     for (int i = 0; i < MAX_SOCKETS; i++)
     {
@@ -268,7 +269,7 @@ int main(int argc, char *args[])
     return 0;
 }
 
-int get_new_client(client_t clients[MAX_SOCKETS])
+int get_new_client(Client clients[MAX_SOCKETS])
 {
     for (int i = 0; i < MAX_SOCKETS; i++)
     {

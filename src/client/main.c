@@ -10,9 +10,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../shared/map.h"
 #include "../shared/net.h"
 #include "../shared/object.h"
-#include "../shared/utils.h"
+#include "../shared/util.h"
 
 #define SDL_FLAGS SDL_INIT_VIDEO | SDL_INIT_AUDIO
 
@@ -46,11 +47,6 @@
 #define NUM_TRACKS 1
 #define NUM_SOUNDS 1
 
-#define MAP_WIDTH 24
-#define MAP_HEIGHT 24
-
-#define NUM_OBJECTS 19
-
 #define MOVE_SPEED 5.0
 #define SPRINT_MULT 2.0
 #define ROTATE_SENSITIVITY 3.0
@@ -75,7 +71,7 @@ typedef struct
 unsigned int get_pixel(SDL_Surface *surface, int x, int y);
 void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
 Image *load_image(const char *file);
-void player_move(unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT], double *pos_x, double *pos_y, double dx, double dy);
+void player_move(double *pos_x, double *pos_y, double dx, double dy);
 void player_rotate(double *dir_x, double *dir_y, double *plane_x, double *plane_y, double angle);
 void comb_sort(int *order, double *dist, int amount);
 unsigned int color_darken(unsigned int color);
@@ -233,30 +229,28 @@ int main(int argc, char *args[])
     int client_id = 0;
 
     // check if the server is full
+    if (tcp_recv(tcp_socket, tcp_packet) > 0)
     {
-        if (tcp_recv(tcp_socket, tcp_packet) > 0)
+        int type;
+        sscanf_s((const char *)tcp_packet->data, "%d", &type);
+
+        switch (type)
         {
-            int type;
-            sscanf_s((const char *)tcp_packet->data, "%d", &type);
+        case PACKET_ENTER:
+        {
+            sscanf_s((const char *)tcp_packet->data, "%d,%d", &type, &client_id);
 
-            switch (type)
-            {
-            case PACKET_ENTER:
-            {
-                sscanf_s((const char *)tcp_packet->data, "%d,%d", &type, &client_id);
+            SDL_Log("My ID is %d", client_id);
+        }
+        break;
+        case PACKET_FULL:
+        default:
+        {
+            SDL_Log("Could not join server");
 
-                SDL_Log("My ID is %d", client_id);
-            }
-            break;
-            case PACKET_FULL:
-            default:
-            {
-                SDL_Log("Could not join server");
-
-                return 1;
-            }
-            break;
-            }
+            return 1;
+        }
+        break;
         }
     }
 
@@ -321,106 +315,6 @@ int main(int argc, char *args[])
     TTF_Font *font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
 
     // printf("FOV: %f\n", 2 * atan(plane_y) / M_PI * 180.0);
-
-    unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT] = {
-        {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
-        {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
-        {8, 0, 3, 3, 0, 0, 0, 0, 0, 8, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6},
-        {8, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6},
-        {8, 0, 3, 3, 0, 0, 0, 0, 0, 8, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
-        {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 4, 0, 0, 0, 0, 0, 6, 6, 6, 0, 6, 4, 6},
-        {8, 8, 8, 8, 0, 8, 8, 8, 8, 8, 8, 4, 4, 4, 4, 4, 4, 6, 0, 0, 0, 0, 0, 6},
-        {7, 7, 7, 7, 0, 7, 7, 7, 7, 0, 8, 0, 8, 0, 8, 0, 8, 4, 0, 4, 0, 6, 0, 6},
-        {7, 7, 0, 0, 0, 0, 0, 0, 7, 8, 0, 8, 0, 8, 0, 8, 8, 6, 0, 0, 0, 0, 0, 6},
-        {7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 6, 0, 0, 0, 0, 0, 4},
-        {7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 6, 0, 6, 0, 6, 0, 6},
-        {7, 7, 0, 0, 0, 0, 0, 0, 7, 8, 0, 8, 0, 8, 0, 8, 8, 6, 4, 6, 0, 6, 6, 6},
-        {7, 7, 7, 7, 0, 7, 7, 7, 7, 8, 8, 4, 0, 6, 8, 4, 8, 3, 3, 3, 0, 3, 3, 3},
-        {2, 2, 2, 2, 0, 2, 2, 2, 2, 4, 6, 4, 0, 0, 6, 0, 6, 3, 0, 0, 0, 0, 0, 3},
-        {2, 2, 0, 0, 0, 0, 0, 2, 2, 4, 0, 0, 0, 0, 0, 0, 4, 3, 0, 0, 0, 0, 0, 3},
-        {2, 0, 0, 0, 0, 0, 0, 0, 2, 4, 0, 0, 0, 0, 0, 0, 4, 3, 0, 0, 0, 0, 0, 3},
-        {1, 0, 0, 0, 0, 0, 0, 0, 1, 4, 4, 4, 4, 4, 6, 0, 6, 3, 3, 0, 0, 0, 3, 3},
-        {2, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 1, 2, 2, 2, 6, 6, 0, 0, 5, 0, 5, 0, 5},
-        {2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 2, 2, 0, 5, 0, 5, 0, 0, 0, 5, 5},
-        {2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 5, 0, 5, 0, 5, 0, 5, 0, 5},
-        {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5},
-        {2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 5, 0, 5, 0, 5, 0, 5, 0, 5},
-        {2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 2, 2, 0, 5, 0, 5, 0, 0, 0, 5, 5},
-        {2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5}};
-
-    unsigned char floor_map[MAP_WIDTH][MAP_HEIGHT] = {
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
-        {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}};
-
-    unsigned char ceiling_map[MAP_WIDTH][MAP_HEIGHT] = {
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
-        {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6}};
-
-    Object objects[NUM_OBJECTS] = {
-        {20.5, 11.5, 2},
-        {18.5, 4.50, 2},
-        {10.0, 4.50, 2},
-        {10.0, 12.5, 2},
-        {3.50, 6.50, 2},
-        {3.50, 20.5, 2},
-        {3.50, 14.5, 2},
-        {14.5, 20.5, 2},
-        {18.5, 10.5, 1},
-        {18.5, 11.5, 1},
-        {18.5, 12.5, 1},
-        {21.5, 1.50, 0},
-        {15.5, 1.50, 0},
-        {16.0, 1.80, 0},
-        {16.2, 1.20, 0},
-        {3.50, 2.50, 0},
-        {9.50, 15.5, 0},
-        {10.0, 15.1, 0},
-        {10.5, 15.8, 0},
-    };
 
     double pos_x = 22.0; // start position
     double pos_y = 11.5;
@@ -615,7 +509,7 @@ int main(int argc, char *args[])
             double dx = dir_x * move_speed;
             double dy = dir_y * move_speed;
 
-            player_move(wall_map, &pos_x, &pos_y, dx, dy);
+            player_move(&pos_x, &pos_y, dx, dy);
 
             udp_send(udp_socket, udp_packet, server_address, "%d,%d,%lf,%lf", PACKET_MOVEMENT, client_id, pos_x, pos_y);
         }
@@ -626,7 +520,7 @@ int main(int argc, char *args[])
             double dx = -dir_y * move_speed;
             double dy = dir_x * move_speed;
 
-            player_move(wall_map, &pos_x, &pos_y, dx, dy);
+            player_move(&pos_x, &pos_y, dx, dy);
         }
 
         // move backward
@@ -635,7 +529,7 @@ int main(int argc, char *args[])
             double dx = -dir_x * move_speed;
             double dy = -dir_y * move_speed;
 
-            player_move(wall_map, &pos_x, &pos_y, dx, dy);
+            player_move(&pos_x, &pos_y, dx, dy);
         }
 
         // strafe right
@@ -644,7 +538,7 @@ int main(int argc, char *args[])
             double dx = dir_y * move_speed;
             double dy = -dir_x * move_speed;
 
-            player_move(wall_map, &pos_x, &pos_y, dx, dy);
+            player_move(&pos_x, &pos_y, dx, dy);
         }
 
         // calculate rotation angle
@@ -1375,7 +1269,7 @@ Image *load_image(const char *file)
     return image;
 }
 
-void player_move(unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT], double *pos_x, double *pos_y, double dx, double dy)
+void player_move(double *pos_x, double *pos_y, double dx, double dy)
 {
     if (wall_map[(int)(*pos_x + dx)][(int)(*pos_y)] == 0)
     {
