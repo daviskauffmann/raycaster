@@ -10,11 +10,19 @@
 #define SDLNet_UDP_AllocPacket(size) SDLNet_AllocPacket(size)
 #define SDLNet_UDP_FreePacket(packet) SDLNet_FreePacket(packet)
 
+typedef enum {
+    PACKET_ENTER,
+    PACKET_FULL,
+    PACKET_MOVEMENT,
+    PACKET_ROTATION,
+    PACKET_DISCONNECT
+} PacketType;
+
 typedef struct
 {
-    int maxlen;
-    unsigned char *data;
+    Uint8 *data;
     int len;
+    int maxlen;
 } TCPpacket;
 
 TCPpacket *_SDLNet_TCP_AllocPacket(int size);

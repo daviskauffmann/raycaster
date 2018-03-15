@@ -5,7 +5,6 @@
 #include <string.h>
 
 #include "net.h"
-#include "utils.h"
 
 TCPpacket *_SDLNet_TCP_AllocPacket(int size)
 {

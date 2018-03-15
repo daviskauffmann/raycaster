@@ -172,16 +172,16 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    IPaddress address;
+    IPaddress server_address;
 
-    if (SDLNet_ResolveHost(&address, SERVER_HOST, SERVER_PORT) != 0)
+    if (SDLNet_ResolveHost(&server_address, SERVER_HOST, SERVER_PORT) != 0)
     {
         SDL_Log("SDLNet_ResolveHost: %s", SDLNet_GetError());
 
         return 1;
     }
 
-    TCPsocket tcp_socket = SDLNet_TCP_Open(&address);
+    TCPsocket tcp_socket = SDLNet_TCP_Open(&server_address);
 
     if (!tcp_socket)
     {
@@ -228,32 +228,41 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    SDL_Log("Connected to server %s:%i", SDLNet_ResolveIP(&address), SDLNet_Read16(&address.port));
+    SDL_Log("Connected to server %s:%i", SDLNet_ResolveIP(&server_address), SDLNet_Read16(&server_address.port));
+
+    int client_id = 0;
 
     // check if the server is full
     {
-        tcp_send(tcp_socket, "Hello, Server!");
-
         if (tcp_recv(tcp_socket, tcp_packet) > 0)
         {
-            if (strcmp((const char *)tcp_packet->data, "Server is full!") == 0)
+            int type;
+            sscanf_s((const char *)tcp_packet->data, "%d", &type);
+
+            switch (type)
             {
+            case PACKET_ENTER:
+            {
+                sscanf_s((const char *)tcp_packet->data, "%d,%d", &type, &client_id);
+
+                SDL_Log("My ID is %d", client_id);
+            }
+            break;
+            case PACKET_FULL:
+            default:
+            {
+                SDL_Log("Could not join server");
+
                 return 1;
+            }
+            break;
             }
         }
     }
 
     // TODO: make UDP connection
 
-    // get map data
-    {
-        tcp_send(tcp_socket, "Requesting map!");
-
-        if (tcp_recv(tcp_socket, tcp_packet) > 0)
-        {
-            // TODO: do something with the map data
-        }
-    }
+    // TODO: get map data
 
     Image **textures = malloc(NUM_TEXTURES * sizeof(Image *));
 #if 1
@@ -608,7 +617,7 @@ int main(int argc, char *args[])
 
             player_move(wall_map, &pos_x, &pos_y, dx, dy);
 
-            udp_send(udp_socket, udp_packet, address, "I am moving!");
+            udp_send(udp_socket, udp_packet, server_address, "%d,%d,%lf,%lf", PACKET_MOVEMENT, client_id, pos_x, pos_y);
         }
 
         // strafe left
@@ -618,8 +627,6 @@ int main(int argc, char *args[])
             double dy = dir_x * move_speed;
 
             player_move(wall_map, &pos_x, &pos_y, dx, dy);
-
-            udp_send(udp_socket, udp_packet, address, "I am moving!");
         }
 
         // move backward
@@ -629,8 +636,6 @@ int main(int argc, char *args[])
             double dy = -dir_y * move_speed;
 
             player_move(wall_map, &pos_x, &pos_y, dx, dy);
-
-            udp_send(udp_socket, udp_packet, address, "I am moving!");
         }
 
         // strafe right
@@ -640,8 +645,6 @@ int main(int argc, char *args[])
             double dy = -dir_x * move_speed;
 
             player_move(wall_map, &pos_x, &pos_y, dx, dy);
-
-            udp_send(udp_socket, udp_packet, address, "I am moving!");
         }
 
         // calculate rotation angle
@@ -668,8 +671,6 @@ int main(int argc, char *args[])
                 shoot_timer = 0.0;
 
                 Mix_PlayChannel(-1, sounds[0], 0);
-
-                udp_send(udp_socket, udp_packet, address, "I am shooting!");
             }
         }
 
@@ -1221,7 +1222,7 @@ int main(int argc, char *args[])
         SDL_RenderPresent(renderer);
     }
 
-    tcp_send(tcp_socket, "Goodbye, Server!");
+    tcp_send(tcp_socket, "%d", PACKET_DISCONNECT);
 
     free(depth_buffer);
     free(pixel_buffer);

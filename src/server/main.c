@@ -13,6 +13,7 @@
 #define SERVER_PORT 1000
 #define MAX_SOCKETS 2
 
+// TODO: handle timeouts on clients to automatically disconnect them
 typedef struct client_s
 {
     int id;
@@ -129,7 +130,7 @@ int main(int argc, char *args[])
 
                     SDLNet_TCP_AddSocket(tcp_sockets, socket);
 
-                    tcp_send(socket, "Hello, Client!");
+                    tcp_send(socket, "%d,%d", PACKET_ENTER, client_id);
 
                     int num_clients = 0;
 
@@ -152,7 +153,7 @@ int main(int argc, char *args[])
                 {
                     SDL_Log("Client tried to connect, but server is full");
 
-                    tcp_send(socket, "Server is full!");
+                    tcp_send(socket, "%d", PACKET_FULL);
                 }
             }
         }
@@ -168,24 +169,12 @@ int main(int argc, char *args[])
                     {
                         if (tcp_recv(clients[i].socket, tcp_packet) > 0)
                         {
-                            // TEST: sending large data
-                            if (strcmp((const char *)tcp_packet->data, "Requesting map!") == 0)
+                            int type;
+                            sscanf_s((const char *)tcp_packet->data, "%d", &type);
+
+                            switch (type)
                             {
-                                tcp_send(clients[i].socket, "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.");
-                            }
-                            // TEST: relaying message to all clients
-                            else if (strcmp((const char *)udp_packet->data, "I am shooting!") == 0)
-                            {
-                                for (int j = 0; j < MAX_SOCKETS; j++)
-                                {
-                                    if (clients[j].id != -1)
-                                    {
-                                        tcp_send(clients[j].socket, "Someone is shooting!");
-                                    }
-                                }
-                            }
-                            // handle client disconnect
-                            else if (strcmp((const char *)tcp_packet->data, "Goodbye, Server!") == 0)
+                            case PACKET_DISCONNECT:
                             {
                                 int client_id = clients[i].id;
                                 IPaddress *client_address = SDLNet_TCP_GetPeerAddress(clients[i].socket);
@@ -214,6 +203,13 @@ int main(int argc, char *args[])
 
                                 SDL_Log("There are %d clients connected", num_clients);
                             }
+                            break;
+                            default:
+                            {
+                                SDL_Log("Unknown packet type");
+                            }
+                            break;
+                            }
                         }
                     }
                 }
@@ -223,6 +219,26 @@ int main(int argc, char *args[])
         // handle UDP messages
         while (udp_recv(udp_socket, udp_packet) > 0)
         {
+            int type;
+            sscanf_s((const char *)udp_packet->data, "%d", &type);
+
+            switch (type)
+            {
+            case PACKET_MOVEMENT:
+            {
+                int client_id;
+                double pos_x;
+                double pos_y;
+                sscanf_s((const char *)udp_packet->data, "%d,%d,%lf,%lf", &type, &client_id, &pos_x, &pos_y);
+
+                SDL_Log("%d: %lf, %lf", client_id, pos_x, pos_y);
+            }
+            break;
+            default:
+            {
+            }
+            break;
+            }
         }
 
         SDL_Delay(100);
