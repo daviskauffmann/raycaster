@@ -82,7 +82,6 @@ SDL_Texture *screen = NULL;
 
 IPaddress server_address;
 TCPsocket tcp_socket = NULL;
-TCPpacket *tcp_packet = NULL;
 SDLNet_SocketSet tcp_sockets = NULL;
 UDPsocket udp_socket = NULL;
 UDPpacket *udp_packet = NULL;
@@ -219,15 +218,6 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    tcp_packet = SDLNet_TCP_AllocPacket(PACKET_SIZE);
-
-    if (!tcp_packet)
-    {
-        SDL_Log("SDLNet_TCP_AllocPacket: %s", SDLNet_GetError());
-
-        return 1;
-    }
-
     tcp_sockets = SDLNet_AllocSocketSet(1);
 
     if (!tcp_sockets)
@@ -246,7 +236,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    udp_packet = SDLNet_UDP_AllocPacket(PACKET_SIZE);
+    udp_packet = SDLNet_AllocPacket(PACKET_SIZE);
 
     if (!udp_packet)
     {
@@ -259,70 +249,45 @@ int main(int argc, char *args[])
 
     SDLNet_TCP_AddSocket(tcp_sockets, tcp_socket);
 
-    // // TEST
-    // Packet *packet = malloc(sizeof(Packet));
-    // int len = SDLNet_TCP_Recv(tcp_socket, packet, sizeof(Packet));
-    // SDL_Log("bytes: %d, type: %d", len, packet->type);
-
-    // switch (packet->type)
-    // {
-    // case PACKET_ENTER:
-    // {
-    //     SDL_Log("id: %d", packet->data.enter.id);
-    // }
-    // break;
-    // case PACKET_SYNC:
-    // {
-    //     for (int i = 0; i < MAX_SOCKETS; i++)
-    //     {
-    //         SDL_Log("id: %d", packet->data.sync.players[i].id);
-    //     }
-    // }
-    // break;
-    // default:
-    // {
-    //     SDL_Log("unrecognized packet type");
-    // }
-    // break;
-    // }
-    // free(packet);
-    // return 0;
-
-    for (int i = 0; i < MAX_SOCKETS; i++)
-    {
-        players[i].id = -1;
-    }
-
     // check if the server is full
-    if (tcp_recv(tcp_socket, tcp_packet) > 0)
     {
-        int type;
-        sscanf_s((const char *)tcp_packet->data, "%d", &type);
+        Packet *packet = malloc(sizeof(Packet));
+        int len = SDLNet_TCP_Recv(tcp_socket, packet, sizeof(Packet));
 
-        switch (type)
+        if (len > 0)
         {
-        case PACKET_ENTER:
-        {
-            player.id = -1;
-            player.pos_x = 22.0;
-            player.pos_y = 11.5;
-            player.dir_x = -1.0;
-            player.dir_y = 0.0;
-            player.plane_x = 0.0;
-            player.plane_y = 1.0;
+            // logging
+            IPaddress *address = SDLNet_TCP_GetPeerAddress(tcp_socket);
+            const char *host = SDLNet_ResolveIP(address);
+            unsigned short port = SDLNet_Read16(&address->port);
 
-            sscanf_s((const char *)tcp_packet->data, "%d %d %lf %lf", &type, &player.id, &player.pos_x, &player.pos_y);
-        }
-        break;
-        case PACKET_FULL:
-        default:
-        {
-            SDL_Log("Could not join server");
+            SDL_Log("TCP: Received %d bytes from %s:%d of type %d", len, host, port, packet->type);
 
-            return 1;
+            switch (packet->type)
+            {
+            case PACKET_ENTER:
+            {
+                player.id = packet->data.enter.id;
+                player.pos_x = 22.0;
+                player.pos_y = 11.5;
+                player.dir_x = -1.0;
+                player.dir_y = 0.0;
+                player.plane_x = 0.0;
+                player.plane_y = 1.0;
+            }
+            break;
+            case PACKET_FULL:
+            default:
+            {
+                SDL_Log("Could not join server");
+
+                return 1;
+            }
+            break;
+            }
         }
-        break;
-        }
+
+        free(packet);
     }
 
     textures[0] = load_image("assets/images/eagle.png");
@@ -350,19 +315,19 @@ int main(int argc, char *args[])
 
     while (!quit)
     {
-        if (SDLNet_CheckSockets(tcp_sockets, 0) > 0)
-        {
-            if (SDLNet_SocketReady(tcp_socket))
-            {
-                if (tcp_recv(tcp_socket, tcp_packet) > 0)
-                {
-                }
-            }
-        }
+        // if (SDLNet_CheckSockets(tcp_sockets, 0) > 0)
+        // {
+        //     if (SDLNet_SocketReady(tcp_socket))
+        //     {
+        //         if (tcp_recv(tcp_socket, tcp_packet) > 0)
+        //         {
+        //         }
+        //     }
+        // }
 
-        if (udp_recv(udp_socket, udp_packet) > 0)
-        {
-        }
+        // if (udp_recv(udp_socket, udp_packet) > 0)
+        // {
+        // }
 
         // timing for input and FPS counter
         previous_time = current_time;
@@ -521,7 +486,16 @@ int main(int argc, char *args[])
 
             player_move(dx, dy);
 
-            udp_send(udp_socket, udp_packet, server_address, "%d %d %lf %lf", PACKET_MOVEMENT, player.id, player.pos_x, player.pos_y);
+            Packet *packet = malloc(sizeof(Packet));
+            packet->type = PACKET_MOVEMENT;
+            packet->data.movement.id = player.id;
+            packet->data.movement.pos_x = player.pos_x;
+            packet->data.movement.pos_y = player.pos_y;
+            udp_packet->address = server_address;
+            udp_packet->data = packet;
+            udp_packet->len = sizeof(Packet);
+            SDLNet_UDP_Send(udp_socket, -1, udp_packet);
+            free(packet);
         }
 
         // strafe left
@@ -1126,14 +1100,17 @@ int main(int argc, char *args[])
         SDL_RenderPresent(renderer);
     }
 
-    tcp_send(tcp_socket, "%d", PACKET_DISCONNECT);
+    {
+        Packet *packet = malloc(sizeof(Packet));
+        packet->type = PACKET_DISCONNECT;
+        SDLNet_TCP_Send(tcp_socket, packet, sizeof(Packet));
+        free(packet);
+    }
 
-    // FIXME: this crashes sometimes
-    // SDLNet_UDP_FreePacket(udp_packet);
+    // SDLNet_FreePacket(udp_packet);
     SDLNet_UDP_Close(udp_socket);
     SDLNet_TCP_DelSocket(tcp_sockets, tcp_socket);
     SDLNet_FreeSocketSet(tcp_sockets);
-    SDLNet_TCP_FreePacket(tcp_packet);
     SDLNet_TCP_Close(tcp_socket);
     SDLNet_Quit();
 
