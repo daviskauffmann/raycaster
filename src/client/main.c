@@ -70,11 +70,49 @@ typedef struct
 unsigned int get_pixel(SDL_Surface *surface, int x, int y);
 void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
 Image *load_image(const char *file);
-void player_move(double *pos_x, double *pos_y, double dx, double dy);
-void player_rotate(double *dir_x, double *dir_y, double *plane_x, double *plane_y, double angle);
+void player_move(double dx, double dy);
+void player_rotate(double angle);
 void comb_sort(int *order, double *dist, int amount);
 unsigned int color_darken(unsigned int color);
 unsigned int color_fog(unsigned int color, double distance);
+
+SDL_Window *window = NULL;
+SDL_Renderer *renderer = NULL;
+SDL_Texture *screen = NULL;
+
+IPaddress server_address;
+TCPsocket tcp_socket = NULL;
+TCPpacket *tcp_packet = NULL;
+SDLNet_SocketSet tcp_sockets = NULL;
+UDPsocket udp_socket = NULL;
+UDPpacket *udp_packet = NULL;
+
+double pos_x = 22.0; // start position
+double pos_y = 11.5;
+double dir_x = -1.0; // direction vector
+double dir_y = 0.0;
+double plane_x = 0.0; // camera plane
+double plane_y = 1.0;
+int client_id = 0;
+
+Image *textures[NUM_TEXTURES];
+Image *sprites[NUM_SPRITES];
+
+Mix_Music *tracks[NUM_TRACKS];
+Mix_Chunk *sounds[NUM_SOUNDS];
+
+unsigned int previous_time = 0;
+unsigned int current_time = 0;
+
+bool textured = true;
+bool draw_walls = true;
+bool draw_floor = true;
+bool draw_objects = true;
+bool shading = true;
+bool foggy = true;
+
+unsigned int pixel_buffer[SCREEN_WIDTH * SCREEN_HEIGHT];
+double depth_buffer[SCREEN_WIDTH * SCREEN_HEIGHT];
 
 int main(int argc, char *args[])
 {
@@ -91,7 +129,7 @@ int main(int argc, char *args[])
 
     SDL_SetRelativeMouseMode(SDL_TRUE);
 
-    SDL_Window *window = SDL_CreateWindow(
+    window = SDL_CreateWindow(
         WINDOW_TITLE,
         WINDOW_X,
         WINDOW_Y,
@@ -106,7 +144,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    SDL_Renderer *renderer = SDL_CreateRenderer(
+    renderer = SDL_CreateRenderer(
         window,
         RENDERER_INDEX,
         RENDERER_FLAGS);
@@ -118,7 +156,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    SDL_Texture *screen = SDL_CreateTexture(
+    screen = SDL_CreateTexture(
         renderer,
         SCREEN_FORMAT,
         SCREEN_ACCESS,
@@ -167,8 +205,6 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    IPaddress server_address;
-
     if (SDLNet_ResolveHost(&server_address, SERVER_HOST, SERVER_PORT) != 0)
     {
         SDL_Log("SDLNet_ResolveHost: %s", SDLNet_GetError());
@@ -176,7 +212,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    TCPsocket tcp_socket = SDLNet_TCP_Open(&server_address);
+    tcp_socket = SDLNet_TCP_Open(&server_address);
 
     if (!tcp_socket)
     {
@@ -185,7 +221,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    TCPpacket *tcp_packet = SDLNet_TCP_AllocPacket(PACKET_SIZE);
+    tcp_packet = SDLNet_TCP_AllocPacket(PACKET_SIZE);
 
     if (!tcp_packet)
     {
@@ -194,7 +230,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    SDLNet_SocketSet tcp_sockets = SDLNet_AllocSocketSet(MAX_SOCKETS);
+    tcp_sockets = SDLNet_AllocSocketSet(MAX_SOCKETS);
 
     if (!tcp_sockets)
     {
@@ -203,9 +239,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    SDLNet_TCP_AddSocket(tcp_sockets, tcp_socket);
-
-    UDPsocket udp_socket = SDLNet_UDP_Open(0);
+    udp_socket = SDLNet_UDP_Open(0);
 
     if (!udp_socket)
     {
@@ -214,7 +248,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    UDPpacket *udp_packet = SDLNet_UDP_AllocPacket(PACKET_SIZE);
+    udp_packet = SDLNet_UDP_AllocPacket(PACKET_SIZE);
 
     if (!udp_packet)
     {
@@ -225,7 +259,7 @@ int main(int argc, char *args[])
 
     SDL_Log("Connected to server %s:%i", SDLNet_ResolveIP(&server_address), SDLNet_Read16(&server_address.port));
 
-    int client_id = 0;
+    SDLNet_TCP_AddSocket(tcp_sockets, tcp_socket);
 
     // check if the server is full
     if (tcp_recv(tcp_socket, tcp_packet) > 0)
@@ -237,9 +271,7 @@ int main(int argc, char *args[])
         {
         case PACKET_ENTER:
         {
-            sscanf_s((const char *)tcp_packet->data, "%d,%d", &type, &client_id);
-
-            SDL_Log("My ID is %d", client_id);
+            sscanf_s((const char *)tcp_packet->data, "%d %d %lf %lf", &type, &client_id, &pos_x, &pos_y);
         }
         break;
         case PACKET_FULL:
@@ -253,12 +285,6 @@ int main(int argc, char *args[])
         }
     }
 
-    // TODO: make UDP connection
-
-    // TODO: get map data
-
-    Image **textures = malloc(NUM_TEXTURES * sizeof(Image *));
-#if 1
     textures[0] = load_image("assets/images/eagle.png");
     textures[1] = load_image("assets/images/redbrick.png");
     textures[2] = load_image("assets/images/purplestone.png");
@@ -267,73 +293,18 @@ int main(int argc, char *args[])
     textures[5] = load_image("assets/images/mossy.png");
     textures[6] = load_image("assets/images/wood.png");
     textures[7] = load_image("assets/images/colorstone.png");
-#else
-#define TEXTURE_WIDTH 64
-#define TEXTURE_HEIGHT 64
 
-    for (int i = 0; i < NUM_TEXTURES; i++)
-    {
-        textures[i] = malloc(sizeof(Image));
-        textures[i]->w = TEXTURE_WIDTH;
-        textures[i]->h = TEXTURE_HEIGHT;
-        textures[i]->pixels = malloc(textures[i]->w * textures[i]->h * sizeof(unsigned int));
-    }
-
-    //generate some textures
-    for (int x = 0; x < TEXTURE_WIDTH; x++)
-    {
-        for (int y = 0; y < TEXTURE_HEIGHT; y++)
-        {
-            int xorcolor = (x * 256 / TEXTURE_WIDTH) ^ (y * 256 / TEXTURE_HEIGHT);
-            //int xcolor = x * 256 / texWidth;
-            int ycolor = y * 256 / TEXTURE_HEIGHT;
-            int xycolor = y * 128 / TEXTURE_HEIGHT + x * 128 / TEXTURE_WIDTH;
-            textures[0]->pixels[TEXTURE_WIDTH * y + x] = 65536 * 254 * (x != y && x != TEXTURE_WIDTH - y); //flat red texture with black cross
-            textures[1]->pixels[TEXTURE_WIDTH * y + x] = xycolor + 256 * xycolor + 65536 * xycolor;        //sloped greyscale
-            textures[2]->pixels[TEXTURE_WIDTH * y + x] = 256 * xycolor + 65536 * xycolor;                  //sloped yellow gradient
-            textures[3]->pixels[TEXTURE_WIDTH * y + x] = xorcolor + 256 * xorcolor + 65536 * xorcolor;     //xor greyscale
-            textures[4]->pixels[TEXTURE_WIDTH * y + x] = 256 * xorcolor;                                   //xor green
-            textures[5]->pixels[TEXTURE_WIDTH * y + x] = 65536 * 192 * (x % 16 && y % 16);                 //red bricks
-            textures[6]->pixels[TEXTURE_WIDTH * y + x] = 65536 * ycolor;                                   //red gradient
-            textures[7]->pixels[TEXTURE_WIDTH * y + x] = 128 + 256 * 128 + 65536 * 128;                    //flat grey texture
-        }
-    }
-#endif
-
-    Image **sprites = malloc(NUM_SPRITES * sizeof(Image));
     sprites[0] = load_image("assets/images/barrel.png");
     sprites[1] = load_image("assets/images/pillar.png");
     sprites[2] = load_image("assets/images/greenlight.png");
 
-    Mix_Music **tracks = malloc(NUM_TRACKS * sizeof(Mix_Music *));
     tracks[0] = Mix_LoadMUS("assets/audio/background.mp3");
 
-    Mix_Chunk **sounds = malloc(NUM_SOUNDS * sizeof(Mix_Chunk *));
     sounds[0] = Mix_LoadWAV("assets/audio/shoot.wav");
 
     TTF_Font *font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
 
     // printf("FOV: %f\n", 2 * atan(plane_y) / M_PI * 180.0);
-
-    double pos_x = 22.0; // start position
-    double pos_y = 11.5;
-    double dir_x = -1.0; // direction vector
-    double dir_y = 0.0;
-    double plane_x = 0.0; // camera plane
-    double plane_y = 1.0;
-
-    unsigned int previous_time = 0;
-    unsigned int current_time = 0;
-
-    bool textured = true;
-    bool draw_walls = true;
-    bool draw_floor = true;
-    bool draw_objects = true;
-    bool shading = true;
-    bool foggy = true;
-
-    unsigned int *pixel_buffer = malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(unsigned int));
-    double *depth_buffer = malloc(SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(double));
 
     bool quit = false;
 
@@ -377,7 +348,7 @@ int main(int argc, char *args[])
                 // the constant value is in radians/second
                 double angle = -mouse_dx / 1000.0 * ROTATE_SENSITIVITY;
 
-                player_rotate(&dir_x, &dir_y, &plane_x, &plane_y, angle);
+                player_rotate(angle);
             }
             break;
             case SDL_KEYDOWN:
@@ -508,9 +479,9 @@ int main(int argc, char *args[])
             double dx = dir_x * move_speed;
             double dy = dir_y * move_speed;
 
-            player_move(&pos_x, &pos_y, dx, dy);
+            player_move(dx, dy);
 
-            udp_send(udp_socket, udp_packet, server_address, "%d,%d,%lf,%lf", PACKET_MOVEMENT, client_id, pos_x, pos_y);
+            udp_send(udp_socket, udp_packet, server_address, "%d %d %lf %lf", PACKET_MOVEMENT, client_id, pos_x, pos_y);
         }
 
         // strafe left
@@ -519,7 +490,7 @@ int main(int argc, char *args[])
             double dx = -dir_y * move_speed;
             double dy = dir_x * move_speed;
 
-            player_move(&pos_x, &pos_y, dx, dy);
+            player_move(dx, dy);
         }
 
         // move backward
@@ -528,7 +499,7 @@ int main(int argc, char *args[])
             double dx = -dir_x * move_speed;
             double dy = -dir_y * move_speed;
 
-            player_move(&pos_x, &pos_y, dx, dy);
+            player_move(dx, dy);
         }
 
         // strafe right
@@ -537,7 +508,7 @@ int main(int argc, char *args[])
             double dx = dir_y * move_speed;
             double dy = -dir_x * move_speed;
 
-            player_move(&pos_x, &pos_y, dx, dy);
+            player_move(dx, dy);
         }
 
         // calculate rotation angle
@@ -546,12 +517,12 @@ int main(int argc, char *args[])
 
         if (keys[SDL_SCANCODE_Q])
         {
-            player_rotate(&dir_x, &dir_y, &plane_x, &plane_y, angle);
+            player_rotate(angle);
         }
 
         if (keys[SDL_SCANCODE_E])
         {
-            player_rotate(&dir_x, &dir_y, &plane_x, &plane_y, -angle);
+            player_rotate(-angle);
         }
 
         // shooting
@@ -1117,10 +1088,8 @@ int main(int argc, char *args[])
 
     tcp_send(tcp_socket, "%d", PACKET_DISCONNECT);
 
-    free(depth_buffer);
-    free(pixel_buffer);
-
-    SDLNet_UDP_FreePacket(udp_packet);
+    // FIXME: this crashes sometimes
+    // SDLNet_UDP_FreePacket(udp_packet);
     SDLNet_UDP_Close(udp_socket);
     SDLNet_TCP_DelSocket(tcp_sockets, tcp_socket);
     SDLNet_FreeSocketSet(tcp_sockets);
@@ -1268,31 +1237,31 @@ Image *load_image(const char *file)
     return image;
 }
 
-void player_move(double *pos_x, double *pos_y, double dx, double dy)
+void player_move(double dx, double dy)
 {
-    if (wall_map[(int)(*pos_x + dx)][(int)(*pos_y)] == 0)
+    if (wall_map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
     {
-        *pos_x += dx;
+        pos_x += dx;
     }
-    if (wall_map[(int)(*pos_x)][(int)(*pos_y + dy)] == 0)
+    if (wall_map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
     {
-        *pos_y += dy;
+        pos_y += dy;
     }
 }
 
-void player_rotate(double *dir_x, double *dir_y, double *plane_x, double *plane_y, double angle)
+void player_rotate(double angle)
 {
     double rot_x = cos(angle);
     double rot_y = sin(angle);
 
     // both camera direction and camera plane must be rotated
-    double old_dir_x = *dir_x;
-    *dir_x = *dir_x * rot_x - *dir_y * rot_y;
-    *dir_y = old_dir_x * rot_y + *dir_y * rot_x;
+    double old_dir_x = dir_x;
+    dir_x = dir_x * rot_x - dir_y * rot_y;
+    dir_y = old_dir_x * rot_y + dir_y * rot_x;
 
-    double old_plane_x = *plane_x;
-    *plane_x = *plane_x * rot_x - *plane_y * rot_y;
-    *plane_y = old_plane_x * rot_y + *plane_y * rot_x;
+    double old_plane_x = plane_x;
+    plane_x = plane_x * rot_x - plane_y * rot_y;
+    plane_y = old_plane_x * rot_y + plane_y * rot_x;
 }
 
 void comb_sort(int *order, double *dist, int amount)

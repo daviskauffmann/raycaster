@@ -13,6 +13,7 @@
 typedef enum {
     PACKET_ENTER,
     PACKET_FULL,
+    PACKET_CONNECT,
     PACKET_MOVEMENT,
     PACKET_ROTATION,
     PACKET_DISCONNECT
@@ -27,9 +28,9 @@ typedef struct
 
 TCPpacket *_SDLNet_TCP_AllocPacket(int size);
 void _SDLNet_TCP_FreePacket(TCPpacket *packet);
-void tcp_send(TCPsocket socket, const char *fmt, ...);
+int tcp_send(TCPsocket socket, const char *fmt, ...);
 int tcp_recv(TCPsocket socket, TCPpacket *packet);
-void udp_send(UDPsocket socket, UDPpacket *packet, IPaddress address, const char *fmt, ...);
+int udp_send(UDPsocket socket, UDPpacket *packet, IPaddress address, const char *fmt, ...);
 int udp_recv(UDPsocket socket, UDPpacket *packet);
 
 #endif
