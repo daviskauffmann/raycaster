@@ -12,6 +12,7 @@
 
 #include "../shared/map.h"
 #include "../shared/net.h"
+#include "../shared/player.h"
 #include "../shared/util.h"
 
 #define SDL_FLAGS SDL_INIT_VIDEO | SDL_INIT_AUDIO
@@ -39,7 +40,6 @@
 
 #define SERVER_HOST "127.0.0.1"
 #define SERVER_PORT 1000
-#define MAX_SOCKETS 1
 
 #define NUM_TEXTURES 8
 #define NUM_SPRITES 3
@@ -87,19 +87,17 @@ SDLNet_SocketSet tcp_sockets = NULL;
 UDPsocket udp_socket = NULL;
 UDPpacket *udp_packet = NULL;
 
-double pos_x = 22.0; // start position
-double pos_y = 11.5;
-double dir_x = -1.0; // direction vector
-double dir_y = 0.0;
-double plane_x = 0.0; // camera plane
-double plane_y = 1.0;
-int client_id = 0;
+Player players[MAX_SOCKETS];
+
+Player player;
 
 Image *textures[NUM_TEXTURES];
 Image *sprites[NUM_SPRITES];
 
 Mix_Music *tracks[NUM_TRACKS];
 Mix_Chunk *sounds[NUM_SOUNDS];
+
+TTF_Font *font = NULL;
 
 unsigned int previous_time = 0;
 unsigned int current_time = 0;
@@ -230,7 +228,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    tcp_sockets = SDLNet_AllocSocketSet(MAX_SOCKETS);
+    tcp_sockets = SDLNet_AllocSocketSet(1);
 
     if (!tcp_sockets)
     {
@@ -261,6 +259,40 @@ int main(int argc, char *args[])
 
     SDLNet_TCP_AddSocket(tcp_sockets, tcp_socket);
 
+    // // TEST
+    // Packet *packet = malloc(sizeof(Packet));
+    // int len = SDLNet_TCP_Recv(tcp_socket, packet, sizeof(Packet));
+    // SDL_Log("bytes: %d, type: %d", len, packet->type);
+
+    // switch (packet->type)
+    // {
+    // case PACKET_ENTER:
+    // {
+    //     SDL_Log("id: %d", packet->data.enter.id);
+    // }
+    // break;
+    // case PACKET_SYNC:
+    // {
+    //     for (int i = 0; i < MAX_SOCKETS; i++)
+    //     {
+    //         SDL_Log("id: %d", packet->data.sync.players[i].id);
+    //     }
+    // }
+    // break;
+    // default:
+    // {
+    //     SDL_Log("unrecognized packet type");
+    // }
+    // break;
+    // }
+    // free(packet);
+    // return 0;
+
+    for (int i = 0; i < MAX_SOCKETS; i++)
+    {
+        players[i].id = -1;
+    }
+
     // check if the server is full
     if (tcp_recv(tcp_socket, tcp_packet) > 0)
     {
@@ -271,7 +303,15 @@ int main(int argc, char *args[])
         {
         case PACKET_ENTER:
         {
-            sscanf_s((const char *)tcp_packet->data, "%d %d %lf %lf", &type, &client_id, &pos_x, &pos_y);
+            player.id = -1;
+            player.pos_x = 22.0;
+            player.pos_y = 11.5;
+            player.dir_x = -1.0;
+            player.dir_y = 0.0;
+            player.plane_x = 0.0;
+            player.plane_y = 1.0;
+
+            sscanf_s((const char *)tcp_packet->data, "%d %d %lf %lf", &type, &player.id, &player.pos_x, &player.pos_y);
         }
         break;
         case PACKET_FULL:
@@ -302,7 +342,7 @@ int main(int argc, char *args[])
 
     sounds[0] = Mix_LoadWAV("assets/audio/shoot.wav");
 
-    TTF_Font *font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
+    font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
 
     // printf("FOV: %f\n", 2 * atan(plane_y) / M_PI * 180.0);
 
@@ -476,19 +516,19 @@ int main(int argc, char *args[])
         // move forward
         if (keys[SDL_SCANCODE_W])
         {
-            double dx = dir_x * move_speed;
-            double dy = dir_y * move_speed;
+            double dx = player.dir_x * move_speed;
+            double dy = player.dir_y * move_speed;
 
             player_move(dx, dy);
 
-            udp_send(udp_socket, udp_packet, server_address, "%d %d %lf %lf", PACKET_MOVEMENT, client_id, pos_x, pos_y);
+            udp_send(udp_socket, udp_packet, server_address, "%d %d %lf %lf", PACKET_MOVEMENT, player.id, player.pos_x, player.pos_y);
         }
 
         // strafe left
         if (keys[SDL_SCANCODE_A])
         {
-            double dx = -dir_y * move_speed;
-            double dy = dir_x * move_speed;
+            double dx = -player.dir_y * move_speed;
+            double dy = player.dir_x * move_speed;
 
             player_move(dx, dy);
         }
@@ -496,8 +536,8 @@ int main(int argc, char *args[])
         // move backward
         if (keys[SDL_SCANCODE_S])
         {
-            double dx = -dir_x * move_speed;
-            double dy = -dir_y * move_speed;
+            double dx = -player.dir_x * move_speed;
+            double dy = -player.dir_y * move_speed;
 
             player_move(dx, dy);
         }
@@ -505,8 +545,8 @@ int main(int argc, char *args[])
         // strafe right
         if (keys[SDL_SCANCODE_D])
         {
-            double dx = dir_y * move_speed;
-            double dy = -dir_x * move_speed;
+            double dx = player.dir_y * move_speed;
+            double dy = -player.dir_x * move_speed;
 
             player_move(dx, dy);
         }
@@ -555,12 +595,12 @@ int main(int argc, char *args[])
             double camera_x = (2.0 * x / w) - 1;
 
             // calculate ray position and direction
-            double ray_dir_x = (camera_x * plane_x) + dir_x;
-            double ray_dir_y = (camera_x * plane_y) + dir_y;
+            double ray_dir_x = (camera_x * player.plane_x) + player.dir_x;
+            double ray_dir_y = (camera_x * player.plane_y) + player.dir_y;
 
             // which box of the map we're in
-            int map_x = (int)pos_x;
-            int map_y = (int)pos_y;
+            int map_x = (int)player.pos_x;
+            int map_y = (int)player.pos_y;
 
             // length of ray from current position to next x or y-side
             double side_dist_x;
@@ -577,22 +617,22 @@ int main(int argc, char *args[])
             // calculate step and initial sideDist
             if (ray_dir_x < 0)
             {
-                side_dist_x = (pos_x - map_x) * delta_dist_x;
+                side_dist_x = (player.pos_x - map_x) * delta_dist_x;
                 step_x = -1;
             }
             else
             {
-                side_dist_x = (map_x + 1 - pos_x) * delta_dist_x;
+                side_dist_x = (map_x + 1 - player.pos_x) * delta_dist_x;
                 step_x = 1;
             }
             if (ray_dir_y < 0)
             {
-                side_dist_y = (pos_y - map_y) * delta_dist_y;
+                side_dist_y = (player.pos_y - map_y) * delta_dist_y;
                 step_y = -1;
             }
             else
             {
-                side_dist_y = (map_y + 1 - pos_y) * delta_dist_y;
+                side_dist_y = (map_y + 1 - player.pos_y) * delta_dist_y;
                 step_y = 1;
             }
 
@@ -626,8 +666,8 @@ int main(int argc, char *args[])
             // calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
             double perp_wall_dist =
                 side == 0
-                    ? (map_x - pos_x + (1 - step_x) / 2) / ray_dir_x
-                    : (map_y - pos_y + (1 - step_y) / 2) / ray_dir_y;
+                    ? (map_x - player.pos_x + (1 - step_x) / 2) / ray_dir_x
+                    : (map_y - player.pos_y + (1 - step_y) / 2) / ray_dir_y;
 
             // calculate height of line to draw on screen
             int line_height = (int)(h / perp_wall_dist);
@@ -650,11 +690,11 @@ int main(int argc, char *args[])
                 double wall_x;
                 if (side == 0)
                 {
-                    wall_x = pos_y + perp_wall_dist * ray_dir_y;
+                    wall_x = player.pos_y + perp_wall_dist * ray_dir_y;
                 }
                 else
                 {
-                    wall_x = pos_x + perp_wall_dist * ray_dir_x;
+                    wall_x = player.pos_x + perp_wall_dist * ray_dir_x;
                 }
                 wall_x -= floor(wall_x);
 
@@ -740,8 +780,8 @@ int main(int argc, char *args[])
                         double current_dist = h / (2.0 * y - h);
                         double weight = current_dist / perp_wall_dist;
 
-                        double current_x = weight * floor_x_wall + (1 - weight) * pos_x;
-                        double current_y = weight * floor_y_wall + (1 - weight) * pos_y;
+                        double current_x = weight * floor_x_wall + (1 - weight) * player.pos_x;
+                        double current_y = weight * floor_y_wall + (1 - weight) * player.pos_y;
 
                         // floor
                         {
@@ -884,7 +924,7 @@ int main(int argc, char *args[])
             for (int i = 0; i < NUM_OBJECTS; i++)
             {
                 object_order[i] = i;
-                object_dist[i] = pow(pos_x - objects[i].x, 2) + pow(pos_y - objects[i].y, 2);
+                object_dist[i] = pow(player.pos_x - objects[i].x, 2) + pow(player.pos_y - objects[i].y, 2);
             }
             comb_sort(object_order, object_dist, NUM_OBJECTS);
 
@@ -894,19 +934,19 @@ int main(int argc, char *args[])
                 Object object = objects[object_order[i]];
 
                 // translate object position to relative to camera
-                double object_x = object.x - pos_x;
-                double object_y = object.y - pos_y;
+                double object_x = object.x - player.pos_x;
+                double object_y = object.y - player.pos_y;
 
                 // transform object with the inverse camera matrix
                 // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
                 // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
                 // [ planeY   dirY ]                                          [ -planeY  planeX ]
                 // required for correct matrix multiplication
-                double inv_det = 1 / (plane_x * dir_y - dir_x * plane_y);
+                double inv_det = 1 / (player.plane_x * player.dir_y - player.dir_x * player.plane_y);
 
                 // transform_y is actually the depth inside the screen, that what Z is in 3D
-                double transform_x = inv_det * (dir_y * object_x - dir_x * object_y);
-                double transform_y = inv_det * (-plane_y * object_x + plane_x * object_y);
+                double transform_x = inv_det * (player.dir_y * object_x - player.dir_x * object_y);
+                double transform_y = inv_det * (-player.plane_y * object_x + player.plane_x * object_y);
 
                 // where the object is on the screen
                 int object_screen_x = (int)((w / 2) * (1 + transform_x / transform_y));
@@ -1034,9 +1074,9 @@ int main(int argc, char *args[])
 
         // display position
         {
-            int pos_text_len = snprintf(NULL, 0, "Pos: (%f, %f)", pos_x, pos_y);
+            int pos_text_len = snprintf(NULL, 0, "Pos: (%f, %f)", player.pos_x, player.pos_y);
             char *pos_text_buffer = malloc(pos_text_len + 1);
-            sprintf_s(pos_text_buffer, pos_text_len + 1, "Pos: (%f, %f)", pos_x, pos_y);
+            sprintf_s(pos_text_buffer, pos_text_len + 1, "Pos: (%f, %f)", player.pos_x, player.pos_y);
             SDL_Surface *pos_text_surface = TTF_RenderText_Solid(font, pos_text_buffer, (SDL_Color){255, 255, 255, 255});
             SDL_Texture *pos_text_texture = SDL_CreateTextureFromSurface(renderer, pos_text_surface);
             SDL_FreeSurface(pos_text_surface);
@@ -1051,9 +1091,9 @@ int main(int argc, char *args[])
 
         // display direction
         {
-            int dir_text_len = snprintf(NULL, 0, "Dir: (%f, %f)", dir_x, dir_y);
+            int dir_text_len = snprintf(NULL, 0, "Dir: (%f, %f)", player.dir_x, player.dir_y);
             char *dir_text_buffer = malloc(dir_text_len + 1);
-            sprintf_s(dir_text_buffer, dir_text_len + 1, "Dir: (%f, %f)", dir_x, dir_y);
+            sprintf_s(dir_text_buffer, dir_text_len + 1, "Dir: (%f, %f)", player.dir_x, player.dir_y);
             SDL_Surface *dir_text_surface = TTF_RenderText_Solid(font, dir_text_buffer, (SDL_Color){255, 255, 255, 255});
             SDL_Texture *dir_text_texture = SDL_CreateTextureFromSurface(renderer, dir_text_surface);
             SDL_FreeSurface(dir_text_surface);
@@ -1068,9 +1108,9 @@ int main(int argc, char *args[])
 
         // display camera plane
         {
-            int plane_text_len = snprintf(NULL, 0, "Plane: (%f, %f)", plane_x, plane_y);
+            int plane_text_len = snprintf(NULL, 0, "Plane: (%f, %f)", player.plane_x, player.plane_y);
             char *plane_text_buffer = malloc(plane_text_len + 1);
-            sprintf_s(plane_text_buffer, plane_text_len + 1, "Plane: (%f, %f)", plane_x, plane_y);
+            sprintf_s(plane_text_buffer, plane_text_len + 1, "Plane: (%f, %f)", player.plane_x, player.plane_y);
             SDL_Surface *plane_text_surface = TTF_RenderText_Solid(font, plane_text_buffer, (SDL_Color){255, 255, 255, 255});
             SDL_Texture *plane_text_texture = SDL_CreateTextureFromSurface(renderer, plane_text_surface);
             SDL_FreeSurface(plane_text_surface);
@@ -1239,13 +1279,13 @@ Image *load_image(const char *file)
 
 void player_move(double dx, double dy)
 {
-    if (wall_map[(int)(pos_x + dx)][(int)(pos_y)] == 0)
+    if (wall_map[(int)(player.pos_x + dx)][(int)(player.pos_y)] == 0)
     {
-        pos_x += dx;
+        player.pos_x += dx;
     }
-    if (wall_map[(int)(pos_x)][(int)(pos_y + dy)] == 0)
+    if (wall_map[(int)(player.pos_x)][(int)(player.pos_y + dy)] == 0)
     {
-        pos_y += dy;
+        player.pos_y += dy;
     }
 }
 
@@ -1255,13 +1295,13 @@ void player_rotate(double angle)
     double rot_y = sin(angle);
 
     // both camera direction and camera plane must be rotated
-    double old_dir_x = dir_x;
-    dir_x = dir_x * rot_x - dir_y * rot_y;
-    dir_y = old_dir_x * rot_y + dir_y * rot_x;
+    double old_dir_x = player.dir_x;
+    player.dir_x = player.dir_x * rot_x - player.dir_y * rot_y;
+    player.dir_y = old_dir_x * rot_y + player.dir_y * rot_x;
 
-    double old_plane_x = plane_x;
-    plane_x = plane_x * rot_x - plane_y * rot_y;
-    plane_y = old_plane_x * rot_y + plane_y * rot_x;
+    double old_plane_x = player.plane_x;
+    player.plane_x = player.plane_x * rot_x - player.plane_y * rot_y;
+    player.plane_y = old_plane_x * rot_y + player.plane_y * rot_x;
 }
 
 void comb_sort(int *order, double *dist, int amount)

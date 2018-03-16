@@ -11,7 +11,6 @@
 #define SDL_FLAGS 0
 
 #define SERVER_PORT 1000
-#define MAX_SOCKETS 2
 
 // TODO: handle timeouts on clients to automatically disconnect them
 typedef struct
@@ -121,6 +120,17 @@ int main(int argc, char *args[])
 
             if (socket)
             {
+                // // TEST
+                // Packet *packet = malloc(sizeof(Packet));
+                // packet->type = PACKET_SYNC;
+                // for (int i = 0; i < MAX_SOCKETS; i++)
+                // {
+                //     packet->data.sync.players[i].id = 5;
+                // }
+                // SDLNet_TCP_Send(socket, packet, sizeof(Packet));
+                // free(packet);
+                // return 0;
+
                 // search for an empty client
                 int client_id = -1;
 
