@@ -13,7 +13,8 @@
 #include "../shared/map.h"
 #include "../shared/net.h"
 #include "../shared/player.h"
-#include "../shared/util.h"
+
+#include "SDL_image_ext.h"
 
 #define SDL_FLAGS SDL_INIT_VIDEO | SDL_INIT_AUDIO
 
@@ -60,16 +61,6 @@
 
 #define FOG_STRENGTH 0.5
 
-typedef struct
-{
-    int w;
-    int h;
-    unsigned int *pixels;
-} Image;
-
-unsigned int get_pixel(SDL_Surface *surface, int x, int y);
-void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
-Image *load_image(const char *file);
 void player_move(double dx, double dy);
 void player_rotate(double angle);
 void comb_sort(int *order, double *dist, int amount);
@@ -81,22 +72,27 @@ SDL_Renderer *renderer = NULL;
 SDL_Texture *screen = NULL;
 
 IPaddress server_address;
+const char *server_host = NULL;
+unsigned short server_port;
+
 TCPsocket tcp_socket = NULL;
 SDLNet_SocketSet tcp_sockets = NULL;
+char tcp_buffer[PACKET_SIZE];
+
 UDPsocket udp_socket = NULL;
 UDPpacket *udp_packet = NULL;
 
-Player players[MAX_SOCKETS];
-
-Player player;
-
-Image *textures[NUM_TEXTURES];
-Image *sprites[NUM_SPRITES];
+IMG_Image *textures[NUM_TEXTURES];
+IMG_Image *sprites[NUM_SPRITES];
 
 Mix_Music *tracks[NUM_TRACKS];
 Mix_Chunk *sounds[NUM_SOUNDS];
 
 TTF_Font *font = NULL;
+
+Player players[MAX_SOCKETS];
+
+Player player;
 
 unsigned int previous_time = 0;
 unsigned int current_time = 0;
@@ -218,6 +214,11 @@ int main(int argc, char *args[])
         return 1;
     }
 
+    server_host = SDLNet_ResolveIP(&server_address);
+    server_port = SDLNet_Read16(&server_address.port);
+
+    SDL_Log("Connected to server %s:%i", server_host, server_port);
+
     tcp_sockets = SDLNet_AllocSocketSet(1);
 
     if (!tcp_sockets)
@@ -226,6 +227,8 @@ int main(int argc, char *args[])
 
         return 1;
     }
+
+    SDLNet_TCP_AddSocket(tcp_sockets, tcp_socket);
 
     udp_socket = SDLNet_UDP_Open(0);
 
@@ -245,63 +248,66 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    SDL_Log("Connected to server %s:%i", SDLNet_ResolveIP(&server_address), SDLNet_Read16(&server_address.port));
+    player.id = -1;
+    player.pos_x = 22.0;
+    player.pos_y = 11.5;
+    player.dir_x = -1.0;
+    player.dir_y = 0.0;
+    player.plane_x = 0.0;
+    player.plane_y = 1.0;
 
-    SDLNet_TCP_AddSocket(tcp_sockets, tcp_socket);
-
-    // check if the server is full
+    // check the server's response to the connection
+    if (SDLNet_TCP_Recv(tcp_socket, tcp_buffer, sizeof(tcp_buffer)))
     {
-        Packet *packet = malloc(sizeof(Packet));
-        int len = SDLNet_TCP_Recv(tcp_socket, packet, sizeof(Packet));
+        Data *data = (Data *)tcp_buffer;
 
-        if (len > 0)
+        switch (data->type)
         {
-            // logging
-            IPaddress *address = SDLNet_TCP_GetPeerAddress(tcp_socket);
-            const char *host = SDLNet_ResolveIP(address);
-            unsigned short port = SDLNet_Read16(&address->port);
+        case DATA_CONNECT_OK:
+        {
+            ConnectData *connect_data = (ConnectData *)data;
 
-            SDL_Log("TCP: Received %d bytes from %s:%d of type %d", len, host, port, packet->type);
+            player.id = connect_data->id_data.id;
 
-            switch (packet->type)
+            for (int i = 0; i < MAX_SOCKETS; i++)
             {
-            case PACKET_ENTER:
-            {
-                player.id = packet->data.enter.id;
-                player.pos_x = 22.0;
-                player.pos_y = 11.5;
-                player.dir_x = -1.0;
-                player.dir_y = 0.0;
-                player.plane_x = 0.0;
-                player.plane_y = 1.0;
-            }
-            break;
-            case PACKET_FULL:
-            default:
-            {
-                SDL_Log("Could not join server");
+                players[i] = connect_data->players[i];
 
-                return 1;
+                SDL_Log("%d: %d", i, players[i].id);
             }
-            break;
-            }
+
+            SDL_Log("Assigned ID: %d", player.id);
         }
+        break;
+        case DATA_CONNECT_FULL:
+        {
+            SDL_Log("Server is full");
 
-        free(packet);
+            return 1;
+        }
+        break;
+        default:
+        {
+            SDL_Log("TCP: Unknown packet type");
+
+            return 1;
+        }
+        break;
+        }
     }
 
-    textures[0] = load_image("assets/images/eagle.png");
-    textures[1] = load_image("assets/images/redbrick.png");
-    textures[2] = load_image("assets/images/purplestone.png");
-    textures[3] = load_image("assets/images/greystone.png");
-    textures[4] = load_image("assets/images/bluestone.png");
-    textures[5] = load_image("assets/images/mossy.png");
-    textures[6] = load_image("assets/images/wood.png");
-    textures[7] = load_image("assets/images/colorstone.png");
+    textures[0] = IMG_LoadAndConvert("assets/images/eagle.png");
+    textures[1] = IMG_LoadAndConvert("assets/images/redbrick.png");
+    textures[2] = IMG_LoadAndConvert("assets/images/purplestone.png");
+    textures[3] = IMG_LoadAndConvert("assets/images/greystone.png");
+    textures[4] = IMG_LoadAndConvert("assets/images/bluestone.png");
+    textures[5] = IMG_LoadAndConvert("assets/images/mossy.png");
+    textures[6] = IMG_LoadAndConvert("assets/images/wood.png");
+    textures[7] = IMG_LoadAndConvert("assets/images/colorstone.png");
 
-    sprites[0] = load_image("assets/images/barrel.png");
-    sprites[1] = load_image("assets/images/pillar.png");
-    sprites[2] = load_image("assets/images/greenlight.png");
+    sprites[0] = IMG_LoadAndConvert("assets/images/barrel.png");
+    sprites[1] = IMG_LoadAndConvert("assets/images/pillar.png");
+    sprites[2] = IMG_LoadAndConvert("assets/images/greenlight.png");
 
     tracks[0] = Mix_LoadMUS("assets/audio/background.mp3");
 
@@ -315,19 +321,43 @@ int main(int argc, char *args[])
 
     while (!quit)
     {
-        // if (SDLNet_CheckSockets(tcp_sockets, 0) > 0)
-        // {
-        //     if (SDLNet_SocketReady(tcp_socket))
-        //     {
-        //         if (tcp_recv(tcp_socket, tcp_packet) > 0)
-        //         {
-        //         }
-        //     }
-        // }
+        // handle TCP messages
+        if (SDLNet_CheckSockets(tcp_sockets, 0) > 0)
+        {
+            if (SDLNet_SocketReady(tcp_socket))
+            {
+                char buffer[PACKET_SIZE];
 
-        // if (udp_recv(udp_socket, udp_packet) > 0)
-        // {
-        // }
+                if (SDLNet_TCP_Recv(tcp_socket, buffer, sizeof(buffer)) > 0)
+                {
+                    Data *data = (Data *)buffer;
+
+                    switch (data->type)
+                    {
+                    default:
+                    {
+                        SDL_Log("TCP: Unknown packet type");
+                    }
+                    break;
+                    }
+                }
+            }
+        }
+
+        // handle UDP messages
+        while (SDLNet_UDP_Recv(udp_socket, udp_packet) != 0)
+        {
+            Data *data = (Data *)udp_packet->data;
+
+            switch (data->type)
+            {
+            default:
+            {
+                SDL_Log("UDP: Unknown packet type");
+            }
+            break;
+            }
+        }
 
         // timing for input and FPS counter
         previous_time = current_time;
@@ -486,16 +516,15 @@ int main(int argc, char *args[])
 
             player_move(dx, dy);
 
-            Packet *packet = malloc(sizeof(Packet));
-            packet->type = PACKET_MOVEMENT;
-            packet->data.movement.id = player.id;
-            packet->data.movement.pos_x = player.pos_x;
-            packet->data.movement.pos_y = player.pos_y;
+            PosData pos_data;
+            pos_data.id_data.data.type = DATA_MOVEMENT_REQUEST;
+            pos_data.id_data.id = player.id;
+            pos_data.x = player.pos_x;
+            pos_data.y = player.pos_y;
             udp_packet->address = server_address;
-            udp_packet->data = packet;
-            udp_packet->len = sizeof(Packet);
+            udp_packet->data = (Uint8 *)&pos_data;
+            udp_packet->len = sizeof(pos_data);
             SDLNet_UDP_Send(udp_socket, -1, udp_packet);
-            free(packet);
         }
 
         // strafe left
@@ -540,7 +569,7 @@ int main(int argc, char *args[])
         }
 
         // shooting
-        local double shoot_timer = 0.0;
+        static double shoot_timer = 0.0;
         shoot_timer += delta_time;
         if (mouse & SDL_BUTTON(SDL_BUTTON_LEFT))
         {
@@ -676,7 +705,7 @@ int main(int argc, char *args[])
                 {
                     // choose a texture
                     int texture_index = wall_map[map_x][map_y] - 1;
-                    Image *texture = textures[texture_index];
+                    IMG_Image *texture = textures[texture_index];
 
                     // x coordinate on the texture
                     int texture_x = (int)(wall_x * texture->w);
@@ -761,7 +790,7 @@ int main(int argc, char *args[])
                         {
                             // choose a texture
                             int texture_index = floor_map[(int)current_x][(int)current_y];
-                            Image *texture = textures[texture_index];
+                            IMG_Image *texture = textures[texture_index];
 
                             // x, y coordinate of the texture
                             int texture_x = (int)(current_x * texture->w / FLOOR_TEXTURE_MULT) % texture->w;
@@ -784,7 +813,7 @@ int main(int argc, char *args[])
                         {
                             // choose a texture
                             int texture_index = ceiling_map[(int)current_x][(int)current_y];
-                            Image *texture = textures[texture_index];
+                            IMG_Image *texture = textures[texture_index];
 
                             // x, y coordinate of the texture
                             int texture_x = (int)(current_x * texture->w / CEILING_TEXTURE_MULT) % texture->w;
@@ -962,7 +991,7 @@ int main(int argc, char *args[])
 
                 // choose the sprite
                 int sprite_index = object.sprite_index;
-                Image *sprite = sprites[sprite_index];
+                IMG_Image *sprite = sprites[sprite_index];
 
                 // loop through every vertical stripe of the sprite on screen
                 for (int x = draw_start_x; x < draw_end_x; x++)
@@ -1101,10 +1130,9 @@ int main(int argc, char *args[])
     }
 
     {
-        Packet *packet = malloc(sizeof(Packet));
-        packet->type = PACKET_DISCONNECT;
-        SDLNet_TCP_Send(tcp_socket, packet, sizeof(Packet));
-        free(packet);
+        Data data;
+        data.type = DATA_DISCONNECT_REQUEST;
+        SDLNet_TCP_Send(tcp_socket, &data, sizeof(data));
     }
 
     // SDLNet_FreePacket(udp_packet);
@@ -1130,13 +1158,11 @@ int main(int argc, char *args[])
 
     for (int i = 0; i < NUM_TEXTURES; i++)
     {
-        free(textures[i]->pixels);
-        free(textures[i]);
+        IMG_FreeImage(textures[i]);
     }
     for (int i = 0; i < NUM_SPRITES; i++)
     {
-        free(sprites[i]->pixels);
-        free(sprites[i]);
+        IMG_FreeImage(sprites[i]);
     }
     IMG_Quit();
 
@@ -1147,111 +1173,6 @@ int main(int argc, char *args[])
     SDL_Quit();
 
     return 0;
-}
-
-unsigned int get_pixel(SDL_Surface *surface, int x, int y)
-{
-    int bpp = surface->format->BytesPerPixel;
-    unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
-
-    switch (bpp)
-    {
-    case 1:
-    {
-        return *p;
-    }
-    break;
-    case 2:
-    {
-        return *(unsigned short *)p;
-    }
-    break;
-    case 3:
-    {
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-        return p[0] << 16 | p[1] << 8 | p[2];
-#else
-        return p[0] | p[1] << 8 | p[2] << 16;
-#endif
-    }
-    break;
-    case 4:
-    {
-        return *(unsigned int *)p;
-    }
-    break;
-    default:
-    {
-        return 0;
-    }
-    break;
-    }
-}
-
-void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
-{
-    int bpp = surface->format->BytesPerPixel;
-    unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
-
-    switch (bpp)
-    {
-    case 1:
-    {
-        *p = (unsigned char)pixel;
-    }
-    break;
-    case 2:
-    {
-        *(unsigned short *)p = (unsigned short)pixel;
-    }
-    break;
-    case 3:
-    {
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-        p[0] = (pixel >> 16) & 0xff;
-        p[1] = (pixel >> 8) & 0xff;
-        p[2] = pixel & 0xff;
-#else
-        p[0] = pixel & 0xff;
-        p[1] = (pixel >> 8) & 0xff;
-        p[2] = (pixel >> 16) & 0xff;
-#endif
-    }
-    break;
-    case 4:
-    {
-        *(unsigned int *)p = pixel;
-    }
-    break;
-    }
-}
-
-Image *load_image(const char *file)
-{
-    SDL_Surface *surface = IMG_Load(file);
-
-    if (!surface)
-    {
-        SDL_Log("IMG_Load: %s", IMG_GetError());
-
-        return NULL;
-    }
-
-    Image *image = malloc(sizeof(Image));
-    image->w = surface->w;
-    image->h = surface->h;
-    image->pixels = malloc(image->w * image->h * sizeof(unsigned int));
-    for (int x = 0; x < image->w; x++)
-    {
-        for (int y = 0; y < image->h; y++)
-        {
-            image->pixels[x + y * image->w] = get_pixel(surface, x, y);
-        }
-    }
-
-    SDL_FreeSurface(surface);
-
-    return image;
 }
 
 void player_move(double dx, double dy)
