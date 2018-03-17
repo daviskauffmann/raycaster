@@ -272,11 +272,9 @@ int main(int argc, char *args[])
             for (int i = 0; i < MAX_SOCKETS; i++)
             {
                 players[i] = connect_data->players[i];
-
-                SDL_Log("%d: %d", i, players[i].id);
             }
 
-            SDL_Log("Assigned ID: %d", player.id);
+            SDL_Log("Server assigned ID: %d", player.id);
         }
         break;
         case DATA_CONNECT_FULL:
@@ -296,6 +294,17 @@ int main(int argc, char *args[])
         }
     }
 
+    // make a UDP "connection" to the server
+    {
+        IdData id_data;
+        id_data.data.type = DATA_UDP_CONNECT_REQUEST;
+        id_data.id = player.id;
+        udp_packet->address = server_address;
+        udp_packet->data = (Uint8 *)&id_data;
+        udp_packet->len = sizeof(id_data);
+        SDLNet_UDP_Send(udp_socket, -1, udp_packet);
+    }
+
     textures[0] = IMG_LoadAndConvert("assets/images/eagle.png");
     textures[1] = IMG_LoadAndConvert("assets/images/redbrick.png");
     textures[2] = IMG_LoadAndConvert("assets/images/purplestone.png");
@@ -304,18 +313,16 @@ int main(int argc, char *args[])
     textures[5] = IMG_LoadAndConvert("assets/images/mossy.png");
     textures[6] = IMG_LoadAndConvert("assets/images/wood.png");
     textures[7] = IMG_LoadAndConvert("assets/images/colorstone.png");
-
     sprites[0] = IMG_LoadAndConvert("assets/images/barrel.png");
     sprites[1] = IMG_LoadAndConvert("assets/images/pillar.png");
     sprites[2] = IMG_LoadAndConvert("assets/images/greenlight.png");
 
     tracks[0] = Mix_LoadMUS("assets/audio/background.mp3");
-
     sounds[0] = Mix_LoadWAV("assets/audio/shoot.wav");
 
     font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
 
-    // printf("FOV: %f\n", 2 * atan(plane_y) / M_PI * 180.0);
+    SDL_Log("FOV: %f", 2 * atan(player.plane_y) / M_PI * 180.0);
 
     bool quit = false;
 
@@ -326,11 +333,9 @@ int main(int argc, char *args[])
         {
             if (SDLNet_SocketReady(tcp_socket))
             {
-                char buffer[PACKET_SIZE];
-
-                if (SDLNet_TCP_Recv(tcp_socket, buffer, sizeof(buffer)) > 0)
+                if (SDLNet_TCP_Recv(tcp_socket, tcp_buffer, sizeof(tcp_buffer)) > 0)
                 {
-                    Data *data = (Data *)buffer;
+                    Data *data = (Data *)tcp_buffer;
 
                     switch (data->type)
                     {
@@ -1135,7 +1140,7 @@ int main(int argc, char *args[])
         SDLNet_TCP_Send(tcp_socket, &data, sizeof(data));
     }
 
-    // SDLNet_FreePacket(udp_packet);
+    SDLNet_FreePacket(udp_packet);
     SDLNet_UDP_Close(udp_socket);
     SDLNet_TCP_DelSocket(tcp_sockets, tcp_socket);
     SDLNet_FreeSocketSet(tcp_sockets);

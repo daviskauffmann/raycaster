@@ -16,6 +16,7 @@ typedef struct
 {
     int id;
     TCPsocket socket;
+    IPaddress udp_address;
 } Client;
 
 IPaddress server_address;
@@ -143,7 +144,7 @@ int main(int argc, char *args[])
                     SDLNet_TCP_AddSocket(tcp_sockets, clients[client_id].socket);
 
                     // get info about the socket
-                    IPaddress *address = SDLNet_TCP_GetPeerAddress(socket);
+                    IPaddress *address = SDLNet_TCP_GetPeerAddress(clients[client_id].socket);
                     const char *host = SDLNet_ResolveIP(address);
                     unsigned short port = SDLNet_Read16(&address->port);
 
@@ -267,6 +268,17 @@ int main(int argc, char *args[])
 
             switch (data->type)
             {
+            case DATA_UDP_CONNECT_REQUEST:
+            {
+                IdData *id_data = (IdData *)data;
+
+                int id = id_data->id;
+
+                SDL_Log("Saving UDP info of client %d", id);
+
+                clients[id].udp_address = udp_packet->address;
+            }
+            break;
             case DATA_MOVEMENT_REQUEST:
             {
                 PosData *pos_data = (PosData *)data;
@@ -275,7 +287,30 @@ int main(int argc, char *args[])
                 double x = pos_data->x;
                 double y = pos_data->y;
 
-                SDL_Log("Updating position of ID %d to (%lf, %lf)", id, x, y);
+                SDL_Log("Updating position of client %d to (%lf, %lf)", id, x, y);
+
+                // TODO: perform validation
+
+                // update the player's position
+                players[id].pos_x = x;
+                players[id].pos_y = y;
+
+                // inform other clients
+                for (int i = 0; i < MAX_SOCKETS; i++)
+                {
+                    if (clients[i].id != -1)
+                    {
+                        PosData pos_data2;
+                        pos_data2.id_data.data.type = DATA_DISCONNECT_BROADCAST;
+                        pos_data2.id_data.id = id;
+                        pos_data2.x = x;
+                        pos_data2.y = y;
+                        udp_packet->address = clients[i].udp_address;
+                        udp_packet->data = (Uint8 *)&pos_data2;
+                        udp_packet->len = sizeof(pos_data2);
+                        SDLNet_UDP_Send(udp_socket, -1, udp_packet);
+                    }
+                }
             }
             break;
             default:
