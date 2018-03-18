@@ -248,52 +248,53 @@ int main(int argc, char *args[])
     }
 
     // check the server's response to the connection
-    if (SDLNet_TCP_Recv(tcp_socket, tcp_buffer, sizeof(tcp_buffer)))
     {
-        Data *data = (Data *)tcp_buffer;
+        int len = SDLNet_TCP_Recv(tcp_socket, tcp_buffer, sizeof(tcp_buffer));
 
-        switch (data->type)
+        if (len > 0)
         {
-        case DATA_CONNECT_OK:
-        {
-            ConnectData *connect_data = (ConnectData *)data;
+            int type = ((Net_Data *)tcp_buffer)->type;
 
-            int id = connect_data->id;
+            SDL_Log("TCP: Received %d bytes of type %d from %s:%d", len, type, server_host, server_port);
 
-            for (int i = 0; i < MAX_CLIENTS; i++)
+            switch (type)
             {
-                players[i] = connect_data->players[i];
+            case DATA_CONNECT_OK:
+            {
+                int id = ((Net_ConnectData *)tcp_buffer)->id;
+
+                SDL_Log("Server assigned ID: %d", id);
+
+                for (int i = 0; i < MAX_CLIENTS; i++)
+                {
+                    players[i] = ((Net_ConnectData *)tcp_buffer)->players[i];
+                }
+
+                player = &players[id];
             }
+            break;
+            case DATA_CONNECT_FULL:
+            {
+                SDL_Log("Server is full");
 
-            player = &players[id];
+                return 1;
+            }
+            break;
+            default:
+            {
+                SDL_Log("TCP: Unknown packet type");
 
-            SDL_Log("Server assigned ID: %d", player->id);
-        }
-        break;
-        case DATA_CONNECT_FULL:
-        {
-            SDL_Log("Server is full");
-
-            return 1;
-        }
-        break;
-        default:
-        {
-            SDL_Log("TCP: Unknown packet type");
-
-            return 1;
-        }
-        break;
+                return 1;
+            }
+            break;
+            }
         }
     }
 
     // make a UDP "connection" to the server
     {
-        IdData id_data = id_data_create(DATA_UDP_CONNECT_REQUEST, player->id);
-        udp_packet->address = server_address;
-        udp_packet->data = (Uint8 *)&id_data;
-        udp_packet->len = sizeof(id_data);
-        SDLNet_UDP_Send(udp_socket, -1, udp_packet);
+        Net_IdData id_data = Net_CreateIdData(DATA_UDP_CONNECT_REQUEST, player->id);
+        Net_UDP_Send(udp_socket, udp_packet, server_address, (Net_Data *)&id_data, sizeof(id_data));
     }
 
     textures[0] = IMG_LoadAndConvert("assets/images/eagle.png");
@@ -324,9 +325,15 @@ int main(int argc, char *args[])
         {
             if (SDLNet_SocketReady(tcp_socket))
             {
-                if (SDLNet_TCP_Recv(tcp_socket, tcp_buffer, sizeof(tcp_buffer)) > 0)
+                int len = SDLNet_TCP_Recv(tcp_socket, tcp_buffer, sizeof(tcp_buffer));
+
+                if (len > 0)
                 {
-                    switch (((Data *)tcp_buffer)->type)
+                    int type = ((Net_Data *)tcp_buffer)->type;
+
+                    SDL_Log("TCP: Received %d bytes of type %d from %s:%d", len, type, server_host, server_port);
+
+                    switch (type)
                     {
                     default:
                     {
@@ -341,7 +348,14 @@ int main(int argc, char *args[])
         // handle UDP messages
         while (SDLNet_UDP_Recv(udp_socket, udp_packet) != 0)
         {
-            switch (((Data *)udp_packet->data)->type)
+            // get info about the packet
+            int type = ((Net_Data *)udp_packet->data)->type;
+            const char *host = SDLNet_ResolveIP(&udp_packet->address);
+            unsigned short port = SDLNet_Read16(&udp_packet->address.port);
+
+            SDL_Log("UDP: Received %d bytes of type %d from %s:%d", udp_packet->len, type, host, port);
+
+            switch (type)
             {
             default:
             {
@@ -508,11 +522,8 @@ int main(int argc, char *args[])
 
             player_move(dx, dy);
 
-            PosData pos_data = pos_data_create(DATA_MOVEMENT_REQUEST, player->id, player->pos_x, player->pos_y);
-            udp_packet->address = server_address;
-            udp_packet->data = (Uint8 *)&pos_data;
-            udp_packet->len = sizeof(pos_data);
-            SDLNet_UDP_Send(udp_socket, -1, udp_packet);
+            // Net_PosData pos_data = Net_CreatePosData(DATA_MOVEMENT_REQUEST, player->id, player->pos_x, player->pos_y);
+            // Net_UDP_Send(udp_socket, udp_packet, server_address, (Net_Data *)&pos_data, sizeof(pos_data));
         }
 
         // strafe left
@@ -1118,9 +1129,9 @@ int main(int argc, char *args[])
     }
 
     {
-        Data data;
+        Net_Data data;
         data.type = DATA_DISCONNECT_REQUEST;
-        SDLNet_TCP_Send(tcp_socket, &data, sizeof(data));
+        Net_TCP_Send(tcp_socket, &data, sizeof(data));
     }
 
     SDLNet_FreePacket(udp_packet);

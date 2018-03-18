@@ -1,7 +1,8 @@
 #ifndef NET_H
 #define NET_H
 
-#include <stdbool.h>
+#include <SDL/SDL.h>
+#include <SDL/SDL_net.h>
 
 #include "player.h"
 
@@ -17,44 +18,47 @@ typedef enum {
     DATA_DISCONNECT_BROADCAST,
     DATA_MOVEMENT_REQUEST,
     DATA_MOVEMENT_BROADCAST
-} DataType;
+} Net_DataType;
 
 typedef struct
 {
-    DataType type;
-} Data;
+    Net_DataType type;
+} Net_Data;
 
 typedef struct
 {
-    Data data;
+    Net_Data data;
     int id;
-} IdData;
+} Net_IdData;
 
 typedef struct
 {
-    Data data;
+    Net_Data data;
     int id;
     Player players[MAX_CLIENTS];
-} ConnectData;
+} Net_ConnectData;
 
 typedef struct
 {
-    Data data;
+    Net_Data data;
     Player player;
-} PlayerData;
+} Net_PlayerData;
 
 typedef struct
 {
-    Data data;
+    Net_Data data;
     int id;
     double pos_x;
     double pos_y;
-} PosData;
+} Net_PosData;
 
-Data data_create(DataType type);
-IdData id_data_create(DataType type, int id);
-ConnectData connect_data_create(DataType type, int id, Player players[MAX_CLIENTS]);
-PlayerData player_data_create(DataType type, Player player);
-PosData pos_data_create(DataType type, int id, double pos_x, double pos_y);
+Net_Data Net_CreateData(Net_DataType type);
+Net_IdData Net_CreateIdData(Net_DataType type, int id);
+Net_ConnectData Net_CreateConnectData(Net_DataType type, int id, Player players[MAX_CLIENTS]);
+Net_PlayerData Net_CreatePlayerData(Net_DataType type, Player player);
+Net_PosData Net_CreatePosData(Net_DataType type, int id, double pos_x, double pos_y);
+
+int Net_TCP_Send(TCPsocket sock, Net_Data *data, int len);
+int Net_UDP_Send(UDPsocket sock, UDPpacket *packet, IPaddress address, Net_Data *data, int len);
 
 #endif
