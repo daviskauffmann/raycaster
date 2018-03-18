@@ -30,8 +30,8 @@ char tcp_buffer[PACKET_SIZE];
 UDPsocket udp_socket = NULL;
 UDPpacket *udp_packet = NULL;
 
-Client clients[MAX_SOCKETS];
-Player players[MAX_SOCKETS];
+Client clients[MAX_CLIENTS];
+Player players[MAX_CLIENTS];
 
 int main(int argc, char *args[])
 {
@@ -72,7 +72,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    tcp_sockets = SDLNet_AllocSocketSet(MAX_SOCKETS);
+    tcp_sockets = SDLNet_AllocSocketSet(MAX_CLIENTS + 1);
 
     if (!tcp_sockets)
     {
@@ -80,6 +80,8 @@ int main(int argc, char *args[])
 
         return 1;
     }
+
+    SDLNet_TCP_AddSocket(tcp_sockets, tcp_socket);
 
     SDL_Log("Listening on port %d", SERVER_PORT);
 
@@ -101,7 +103,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    for (int i = 0; i < MAX_SOCKETS; i++)
+    for (int i = 0; i < MAX_CLIENTS; i++)
     {
         clients[i].id = -1;
         clients[i].socket = NULL;
@@ -119,101 +121,93 @@ int main(int argc, char *args[])
 
     while (!quit)
     {
-        // accept new clients
-        {
-            TCPsocket socket = SDLNet_TCP_Accept(tcp_socket);
-
-            if (socket)
-            {
-                // search for an empty client
-                int client_id = -1;
-
-                for (int i = 0; i < MAX_SOCKETS; i++)
-                {
-                    if (clients[i].id == -1)
-                    {
-                        client_id = i;
-
-                        break;
-                    }
-                }
-
-                if (client_id != -1)
-                {
-                    // initialize the client
-                    clients[client_id].id = client_id;
-                    clients[client_id].socket = socket;
-
-                    players[client_id].id = client_id;
-
-                    // add to the socket list
-                    SDLNet_TCP_AddSocket(tcp_sockets, clients[client_id].socket);
-
-                    // get info about the socket
-                    IPaddress *address = SDLNet_TCP_GetPeerAddress(clients[client_id].socket);
-                    const char *host = SDLNet_ResolveIP(address);
-                    unsigned short port = SDLNet_Read16(&address->port);
-
-                    SDL_Log("Connected to client %s:%d", host, port);
-
-                    // send the client their info
-                    {
-                        ConnectData connect_data;
-                        connect_data.data.type = DATA_CONNECT_OK;
-                        connect_data.id = clients[client_id].id;
-                        for (int i = 0; i < MAX_SOCKETS; i++)
-                        {
-                            connect_data.players[i] = players[i];
-                        }
-                        SDLNet_TCP_Send(socket, &connect_data, sizeof(connect_data));
-                    }
-
-                    int num_clients = 0;
-
-                    // inform other clients
-                    for (int i = 0; i < MAX_SOCKETS; i++)
-                    {
-                        if (clients[i].id != -1)
-                        {
-                            num_clients++;
-
-                            if (clients[i].id != clients[client_id].id)
-                            {
-                                PlayerData player_data;
-                                player_data.data.type = DATA_CONNECT_BROADCAST;
-                                player_data.player = players[client_id];
-                                SDLNet_TCP_Send(clients[i].socket, &player_data, sizeof(player_data));
-                            }
-                        }
-                    }
-
-                    SDL_Log("There are %d clients connected", num_clients);
-                }
-                else
-                {
-                    SDL_Log("A client tried to connect, but the server is full");
-
-                    Data data;
-                    data.type = DATA_CONNECT_FULL;
-                    SDLNet_TCP_Send(socket, &data, sizeof(data));
-                }
-            }
-        }
-
         // handle TCP messages
         if (SDLNet_CheckSockets(tcp_sockets, 0) > 0)
         {
-            for (int i = 0; i < MAX_SOCKETS; i++)
+            // check activity on the server
+            if (SDLNet_SocketReady(tcp_socket))
+            {
+                // accept new clients
+                TCPsocket socket = SDLNet_TCP_Accept(tcp_socket);
+
+                if (socket)
+                {
+                    // search for an empty client
+                    int client_id = -1;
+
+                    for (int i = 0; i < MAX_CLIENTS; i++)
+                    {
+                        if (clients[i].id == -1)
+                        {
+                            client_id = i;
+
+                            break;
+                        }
+                    }
+
+                    if (client_id != -1)
+                    {
+                        // initialize the client
+                        clients[client_id].id = client_id;
+                        clients[client_id].socket = socket;
+
+                        players[client_id].id = client_id;
+
+                        // add to the socket list
+                        SDLNet_TCP_AddSocket(tcp_sockets, clients[client_id].socket);
+
+                        // get info about the socket
+                        IPaddress *address = SDLNet_TCP_GetPeerAddress(clients[client_id].socket);
+                        const char *host = SDLNet_ResolveIP(address);
+                        unsigned short port = SDLNet_Read16(&address->port);
+
+                        SDL_Log("Connected to client %s:%d", host, port);
+
+                        // send the client their info
+                        {
+                            ConnectData connect_data = connect_data_create(DATA_CONNECT_OK, clients[client_id].id, players);
+                            SDLNet_TCP_Send(socket, &connect_data, sizeof(connect_data));
+                        }
+
+                        int num_clients = 0;
+
+                        // inform other clients
+                        for (int i = 0; i < MAX_CLIENTS; i++)
+                        {
+                            if (clients[i].id != -1)
+                            {
+                                num_clients++;
+
+                                if (clients[i].id != clients[client_id].id)
+                                {
+                                    PlayerData player_data = player_data_create(DATA_CONNECT_BROADCAST, players[client_id]);
+                                    SDLNet_TCP_Send(clients[i].socket, &player_data, sizeof(player_data));
+                                }
+                            }
+                        }
+
+                        SDL_Log("There are %d clients connected", num_clients);
+                    }
+                    else
+                    {
+                        SDL_Log("A client tried to connect, but the server is full");
+
+                        Data data = data_create(DATA_CONNECT_FULL);
+                        SDLNet_TCP_Send(socket, &data, sizeof(data));
+                    }
+                }
+            }
+
+            // check activity on each client
+            for (int i = 0; i < MAX_CLIENTS; i++)
             {
                 if (clients[i].id != -1)
                 {
                     if (SDLNet_SocketReady(clients[i].socket))
                     {
-                        char buffer[PACKET_SIZE];
-
-                        if (SDLNet_TCP_Recv(clients[i].socket, buffer, sizeof(buffer)) > 0)
+                        if (SDLNet_TCP_Recv(clients[i].socket, tcp_buffer, sizeof(tcp_buffer)) > 0)
                         {
-                            Data *data = (Data *)buffer;
+                            Data *data = (Data *)tcp_buffer;
 
                             switch (data->type)
                             {
@@ -229,15 +223,13 @@ int main(int argc, char *args[])
                                 int num_clients = 0;
 
                                 // inform other clients
-                                for (int j = 0; j < MAX_SOCKETS; j++)
+                                for (int j = 0; j < MAX_CLIENTS; j++)
                                 {
                                     if (clients[j].id != -1 && clients[j].id != clients[i].id)
                                     {
                                         num_clients++;
 
-                                        IdData id_data;
-                                        id_data.data.type = DATA_DISCONNECT_BROADCAST;
-                                        id_data.id = clients[i].id;
+                                        IdData id_data = id_data_create(DATA_DISCONNECT_BROADCAST, clients[i].id);
                                         SDLNet_TCP_Send(clients[j].socket, &id_data, sizeof(id_data));
                                     }
                                 }
@@ -277,7 +269,6 @@ int main(int argc, char *args[])
             case DATA_UDP_CONNECT_REQUEST:
             {
                 IdData *id_data = (IdData *)data;
-
                 int id = id_data->id;
 
                 SDL_Log("Saving UDP info of client %d", id);
@@ -288,7 +279,6 @@ int main(int argc, char *args[])
             case DATA_MOVEMENT_REQUEST:
             {
                 PosData *pos_data = (PosData *)data;
-
                 int id = pos_data->id;
                 double pos_x = pos_data->pos_x;
                 double pos_y = pos_data->pos_y;
@@ -302,15 +292,11 @@ int main(int argc, char *args[])
                 players[id].pos_y = pos_y;
 
                 // inform other clients
-                for (int i = 0; i < MAX_SOCKETS; i++)
+                for (int i = 0; i < MAX_CLIENTS; i++)
                 {
                     if (clients[i].id != -1)
                     {
-                        PosData pos_data2;
-                        pos_data2.data.type = DATA_DISCONNECT_BROADCAST;
-                        pos_data2.id = id;
-                        pos_data2.pos_x = pos_x;
-                        pos_data2.pos_y = pos_y;
+                        PosData pos_data2 = pos_data_create(DATA_DISCONNECT_BROADCAST, id, pos_x, pos_y);
                         udp_packet->address = clients[i].udp_address;
                         udp_packet->data = (Uint8 *)&pos_data2;
                         udp_packet->len = sizeof(pos_data2);
@@ -328,7 +314,7 @@ int main(int argc, char *args[])
         }
     }
 
-    for (int i = 0; i < MAX_SOCKETS; i++)
+    for (int i = 0; i < MAX_CLIENTS; i++)
     {
         if (clients[i].id != -1)
         {

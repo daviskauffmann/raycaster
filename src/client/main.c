@@ -90,7 +90,7 @@ Mix_Chunk *sounds[NUM_SOUNDS];
 
 TTF_Font *font = NULL;
 
-Player players[MAX_SOCKETS];
+Player players[MAX_CLIENTS];
 Player *player;
 
 unsigned int previous_time = 0;
@@ -260,7 +260,7 @@ int main(int argc, char *args[])
 
             int id = connect_data->id;
 
-            for (int i = 0; i < MAX_SOCKETS; i++)
+            for (int i = 0; i < MAX_CLIENTS; i++)
             {
                 players[i] = connect_data->players[i];
             }
@@ -289,9 +289,7 @@ int main(int argc, char *args[])
 
     // make a UDP "connection" to the server
     {
-        IdData id_data;
-        id_data.data.type = DATA_UDP_CONNECT_REQUEST;
-        id_data.id = player->id;
+        IdData id_data = id_data_create(DATA_UDP_CONNECT_REQUEST, player->id);
         udp_packet->address = server_address;
         udp_packet->data = (Uint8 *)&id_data;
         udp_packet->len = sizeof(id_data);
@@ -514,15 +512,11 @@ int main(int argc, char *args[])
 
             player_move(dx, dy);
 
-            // PosData pos_data;
-            // pos_data.data.type = DATA_MOVEMENT_REQUEST;
-            // pos_data.id = player->id;
-            // pos_data.pos_x = player->pos_x;
-            // pos_data.pos_y = player->pos_y;
-            // udp_packet->address = server_address;
-            // udp_packet->data = (Uint8 *)&pos_data;
-            // udp_packet->len = sizeof(pos_data);
-            // SDLNet_UDP_Send(udp_socket, -1, udp_packet);
+            PosData pos_data = pos_data_create(DATA_MOVEMENT_REQUEST, player->id, player->pos_x, player->pos_y);
+            udp_packet->address = server_address;
+            udp_packet->data = (Uint8 *)&pos_data;
+            udp_packet->len = sizeof(pos_data);
+            SDLNet_UDP_Send(udp_socket, -1, udp_packet);
         }
 
         // strafe left
