@@ -326,9 +326,7 @@ int main(int argc, char *args[])
             {
                 if (SDLNet_TCP_Recv(tcp_socket, tcp_buffer, sizeof(tcp_buffer)) > 0)
                 {
-                    Data *data = (Data *)tcp_buffer;
-
-                    switch (data->type)
+                    switch (((Data *)tcp_buffer)->type)
                     {
                     default:
                     {
@@ -343,9 +341,7 @@ int main(int argc, char *args[])
         // handle UDP messages
         while (SDLNet_UDP_Recv(udp_socket, udp_packet) != 0)
         {
-            Data *data = (Data *)udp_packet->data;
-
-            switch (data->type)
+            switch (((Data *)udp_packet->data)->type)
             {
             default:
             {
