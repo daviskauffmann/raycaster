@@ -11,8 +11,8 @@
 #include <string.h>
 
 #include "../shared/map.h"
-#include "../shared/net.h"
 #include "../shared/player.h"
+#include "../shared/SDL_net_ext.h"
 
 #include "SDL_image_ext.h"
 
@@ -90,7 +90,6 @@ Mix_Chunk *sounds[NUM_SOUNDS];
 
 TTF_Font *font = NULL;
 
-Player players[MAX_CLIENTS];
 Player *player;
 
 unsigned int previous_time = 0;
@@ -253,7 +252,7 @@ int main(int argc, char *args[])
 
         if (len > 0)
         {
-            int type = ((Net_Data *)tcp_buffer)->type;
+            int type = ((SDLNet_Data *)tcp_buffer)->type;
 
             SDL_Log("TCP: Received %d bytes of type %d from %s:%d", len, type, server_host, server_port);
 
@@ -261,13 +260,13 @@ int main(int argc, char *args[])
             {
             case DATA_CONNECT_OK:
             {
-                int id = ((Net_ConnectData *)tcp_buffer)->id;
+                int id = ((SDLNet_StateData *)tcp_buffer)->id;
 
                 SDL_Log("Server assigned ID: %d", id);
 
-                for (int i = 0; i < MAX_CLIENTS; i++)
+                for (int i = 0; i < MAX_PLAYERS; i++)
                 {
-                    players[i] = ((Net_ConnectData *)tcp_buffer)->players[i];
+                    players[i] = ((SDLNet_StateData *)tcp_buffer)->players[i];
                 }
 
                 player = &players[id];
@@ -293,8 +292,8 @@ int main(int argc, char *args[])
 
     // make a UDP "connection" to the server
     {
-        Net_IdData id_data = Net_CreateIdData(DATA_UDP_CONNECT_REQUEST, player->id);
-        Net_UDP_Send(udp_socket, udp_packet, server_address, (Net_Data *)&id_data, sizeof(id_data));
+        SDLNet_IdData id_data = SDLNet_CreateIdData(DATA_UDP_CONNECT_REQUEST, player->id);
+        SDLNet_UDP_SendData(udp_socket, udp_packet, server_address, (SDLNet_Data *)&id_data, sizeof(id_data));
     }
 
     textures[0] = IMG_LoadAndConvert("assets/images/eagle.png");
@@ -329,7 +328,7 @@ int main(int argc, char *args[])
 
                 if (len > 0)
                 {
-                    int type = ((Net_Data *)tcp_buffer)->type;
+                    int type = ((SDLNet_Data *)tcp_buffer)->type;
 
                     SDL_Log("TCP: Received %d bytes of type %d from %s:%d", len, type, server_host, server_port);
 
@@ -349,7 +348,7 @@ int main(int argc, char *args[])
         while (SDLNet_UDP_Recv(udp_socket, udp_packet) != 0)
         {
             // get info about the packet
-            int type = ((Net_Data *)udp_packet->data)->type;
+            int type = ((SDLNet_Data *)udp_packet->data)->type;
             const char *host = SDLNet_ResolveIP(&udp_packet->address);
             unsigned short port = SDLNet_Read16(&udp_packet->address.port);
 
@@ -1129,9 +1128,9 @@ int main(int argc, char *args[])
     }
 
     {
-        Net_Data data;
+        SDLNet_Data data;
         data.type = DATA_DISCONNECT_REQUEST;
-        Net_TCP_Send(tcp_socket, &data, sizeof(data));
+        SDLNet_TCP_SendData(tcp_socket, &data, sizeof(data));
     }
 
     SDLNet_FreePacket(udp_packet);

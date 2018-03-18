@@ -3,8 +3,8 @@
  * which allows for fast reading/writing of pixel data.
  */
 
-#ifndef IMAGE_H
-#define IMAGE_H
+#ifndef SDL_IMAGE_EXT_H
+#define SDL_IMAGE_EXT_H
 
 typedef struct
 {
