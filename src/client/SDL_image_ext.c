@@ -34,7 +34,7 @@ IMG_Image *IMG_LoadAndConvert(const char *file)
     return image;
 }
 
-void IMG_FreeImage(IMG_Image *image) 
+void IMG_FreeImage(IMG_Image *image)
 {
     free(image->pixels);
     free(image);
@@ -43,6 +43,8 @@ void IMG_FreeImage(IMG_Image *image)
 static unsigned int get_pixel(SDL_Surface *surface, int x, int y)
 {
     int bpp = surface->format->BytesPerPixel;
+
+    // here p is the address to the pixel we want to retrieve
     unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
 
     switch (bpp)
@@ -73,7 +75,7 @@ static unsigned int get_pixel(SDL_Surface *surface, int x, int y)
     break;
     default:
     {
-        return 0;
+        return 0; // shouldn't happen, but avoids warnings
     }
     break;
     }
@@ -82,6 +84,8 @@ static unsigned int get_pixel(SDL_Surface *surface, int x, int y)
 static void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
 {
     int bpp = surface->format->BytesPerPixel;
+
+    // here p is the address to the pixel we want to retrieve
     unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
 
     switch (bpp)

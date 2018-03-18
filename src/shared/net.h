@@ -32,15 +32,23 @@ typedef struct
 
 typedef struct
 {
-    IdData id_data;
+    Data data;
+    int id;
     Player players[MAX_SOCKETS];
 } ConnectData;
 
 typedef struct
 {
-    IdData id_data;
-    double x;
-    double y;
+    Data data;
+    Player player;
+} PlayerData;
+
+typedef struct
+{
+    Data data;
+    int id;
+    double pos_x;
+    double pos_y;
 } PosData;
 
 #endif

@@ -107,6 +107,12 @@ int main(int argc, char *args[])
         clients[i].socket = NULL;
 
         players[i].id = -1;
+        players[i].pos_x = 22.0;
+        players[i].pos_y = 11.5;
+        players[i].dir_x = -1.0;
+        players[i].dir_y = 0.0;
+        players[i].plane_x = 0.0;
+        players[i].plane_y = 1.0;
     }
 
     bool quit = false;
@@ -153,8 +159,8 @@ int main(int argc, char *args[])
                     // send the client their info
                     {
                         ConnectData connect_data;
-                        connect_data.id_data.data.type = DATA_CONNECT_OK;
-                        connect_data.id_data.id = clients[client_id].id;
+                        connect_data.data.type = DATA_CONNECT_OK;
+                        connect_data.id = clients[client_id].id;
                         for (int i = 0; i < MAX_SOCKETS; i++)
                         {
                             connect_data.players[i] = players[i];
@@ -173,10 +179,10 @@ int main(int argc, char *args[])
 
                             if (clients[i].id != clients[client_id].id)
                             {
-                                IdData id_data;
-                                id_data.data.type = DATA_CONNECT_BROADCAST;
-                                id_data.id = clients[client_id].id;
-                                SDLNet_TCP_Send(clients[i].socket, &id_data, sizeof(id_data));
+                                PlayerData player_data;
+                                player_data.data.type = DATA_CONNECT_BROADCAST;
+                                player_data.player = players[client_id];
+                                SDLNet_TCP_Send(clients[i].socket, &player_data, sizeof(player_data));
                             }
                         }
                     }
@@ -283,17 +289,17 @@ int main(int argc, char *args[])
             {
                 PosData *pos_data = (PosData *)data;
 
-                int id = pos_data->id_data.id;
-                double x = pos_data->x;
-                double y = pos_data->y;
+                int id = pos_data->id;
+                double pos_x = pos_data->pos_x;
+                double pos_y = pos_data->pos_y;
 
-                SDL_Log("Updating position of client %d to (%lf, %lf)", id, x, y);
+                SDL_Log("Updating position of client %d to (%lf, %lf)", id, pos_x, pos_y);
 
                 // TODO: perform validation
 
                 // update the player's position
-                players[id].pos_x = x;
-                players[id].pos_y = y;
+                players[id].pos_x = pos_x;
+                players[id].pos_y = pos_y;
 
                 // inform other clients
                 for (int i = 0; i < MAX_SOCKETS; i++)
@@ -301,10 +307,10 @@ int main(int argc, char *args[])
                     if (clients[i].id != -1)
                     {
                         PosData pos_data2;
-                        pos_data2.id_data.data.type = DATA_DISCONNECT_BROADCAST;
-                        pos_data2.id_data.id = id;
-                        pos_data2.x = x;
-                        pos_data2.y = y;
+                        pos_data2.data.type = DATA_DISCONNECT_BROADCAST;
+                        pos_data2.id = id;
+                        pos_data2.pos_x = pos_x;
+                        pos_data2.pos_y = pos_y;
                         udp_packet->address = clients[i].udp_address;
                         udp_packet->data = (Uint8 *)&pos_data2;
                         udp_packet->len = sizeof(pos_data2);
