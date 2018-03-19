@@ -75,6 +75,7 @@ const char *server_host = NULL;
 unsigned short server_port;
 
 TCPsocket tcp_socket = NULL;
+TCPpacket *tcp_packet = NULL;
 
 UDPsocket udp_socket = NULL;
 UDPpacket *udp_packet = NULL;
@@ -202,6 +203,9 @@ int main(int argc, char *args[])
         return 1;
     }
 
+    server_host = SDLNet_ResolveIP(&server_address);
+    server_port = SDLNet_Read16(&server_address.port);
+
     tcp_socket = SDLNet_TCP_Open(&server_address);
 
     if (!tcp_socket)
@@ -211,8 +215,14 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    server_host = SDLNet_ResolveIP(&server_address);
-    server_port = SDLNet_Read16(&server_address.port);
+    tcp_packet = SDLNet_TCP_AllocPacket(PACKET_SIZE);
+
+    if (!tcp_packet)
+    {
+        SDL_Log("SDLNet_TCP_AllocPacket: %s", SDLNet_GetError());
+
+        return 1;
+    }
 
     SDL_Log("Connected to server %s:%i", server_host, server_port);
 
@@ -248,11 +258,10 @@ int main(int argc, char *args[])
 
     // check the server's response to the connection
     {
-        int len;
-        Data *data = SDLNet_TCP_RecvExt(tcp_socket, &len);
-
-        if (len > 0)
+        if (SDLNet_TCP_RecvExt(tcp_socket, tcp_packet) == 1)
         {
+            Data *data = (Data *)tcp_packet->data;
+
             switch (data->type)
             {
             case DATA_CONNECT_OK:
@@ -321,11 +330,10 @@ int main(int argc, char *args[])
         {
             if (SDLNet_SocketReady(tcp_socket))
             {
-                int len;
-                Data *data = SDLNet_TCP_RecvExt(tcp_socket, &len);
-
-                if (len > 0)
+                if (SDLNet_TCP_RecvExt(tcp_socket, tcp_packet) == 1)
                 {
+                    Data *data = (Data *)tcp_packet->data;
+
                     switch (data->type)
                     {
                     default:
@@ -340,13 +348,20 @@ int main(int argc, char *args[])
             // handle UDP messages
             if (SDLNet_SocketReady(udp_socket))
             {
-                int recv;
-                Data *data = SDLNet_UDP_RecvExt(udp_socket, udp_packet, &recv);
-
-                if (recv == 1)
+                if (SDLNet_UDP_RecvExt(udp_socket, udp_packet) == 1)
                 {
+                    Data *data = (Data *)udp_packet->data;
+
                     switch (data->type)
                     {
+                    case DATA_MOVEMENT_BROADCAST:
+                    {
+                        PosData *pos_data = (PosData *)data;
+
+                        players[pos_data->id].pos_x = pos_data->pos_x;
+                        players[pos_data->id].pos_y = pos_data->pos_y;
+                    }
+                    break;
                     default:
                     {
                         SDL_Log("UDP: Unknown packet type");
@@ -514,8 +529,8 @@ int main(int argc, char *args[])
 
             player_move(player, dx, dy);
 
-            MoveData move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
-            SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
+            // MoveData move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
+            // SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
         // strafe left
@@ -1128,8 +1143,9 @@ int main(int argc, char *args[])
     SDLNet_UDP_DelSocket(socket_set, udp_socket);
     SDLNet_TCP_DelSocket(socket_set, tcp_socket);
     SDLNet_FreeSocketSet(socket_set);
-    SDLNet_FreePacket(udp_packet);
+    SDLNet_UDP_FreePacket(udp_packet);
     SDLNet_UDP_Close(udp_socket);
+    SDLNet_TCP_FreePacket(tcp_packet);
     SDLNet_TCP_Close(tcp_socket);
     SDLNet_Quit();
 

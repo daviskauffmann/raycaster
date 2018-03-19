@@ -4,6 +4,8 @@
 #include "map.h"
 #include "player.h"
 
+#define PACKET_SIZE 1024
+
 typedef enum {
     DATA_CONNECT_OK,
     DATA_CONNECT_FULL,

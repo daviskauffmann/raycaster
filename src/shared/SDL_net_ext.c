@@ -3,7 +3,21 @@
 
 #include "SDL_net_ext.h"
 
-static char buffer[PACKET_SIZE];
+TCPpacket *_SDLNet_TCP_AllocPacket(int size)
+{
+    TCPpacket *packet = malloc(sizeof(TCPpacket));
+
+    packet->data = malloc(size);
+    packet->maxlen = size;
+
+    return packet;
+}
+
+void _SDLNet_TCP_FreePacket(TCPpacket *packet)
+{
+    free(packet->data);
+    free(packet);
+}
 
 int SDLNet_TCP_SendExt(TCPsocket sock, void *data, int len)
 {
@@ -16,17 +30,22 @@ int SDLNet_TCP_SendExt(TCPsocket sock, void *data, int len)
     return SDLNet_TCP_Send(sock, data, len);
 }
 
-void *SDLNet_TCP_RecvExt(TCPsocket sock, int *len)
+int SDLNet_TCP_RecvExt(TCPsocket sock, TCPpacket *packet)
 {
-    *len = SDLNet_TCP_Recv(sock, buffer, sizeof(buffer));
+    packet->len = SDLNet_TCP_Recv(sock, packet->data, packet->maxlen);
 
-    IPaddress *address = SDLNet_TCP_GetPeerAddress(sock);
-    const char *host = SDLNet_ResolveIP(address);
-    unsigned short port = SDLNet_Read16(&address->port);
+    if (packet->len > 0)
+    {
+        IPaddress *address = SDLNet_TCP_GetPeerAddress(sock);
+        const char *host = SDLNet_ResolveIP(address);
+        unsigned short port = SDLNet_Read16(&address->port);
 
-    SDL_Log("TCP: Received %d bytes from %s:%d", *len, host, port);
+        SDL_Log("TCP: Received %d bytes from %s:%d", packet->len, host, port);
 
-    return buffer;
+        return 1;
+    }
+
+    return 0;
 }
 
 int SDLNet_UDP_SendExt(UDPsocket sock, UDPpacket *packet, IPaddress address, void *data, int len)
@@ -43,14 +62,14 @@ int SDLNet_UDP_SendExt(UDPsocket sock, UDPpacket *packet, IPaddress address, voi
     return SDLNet_UDP_Send(sock, -1, packet);
 }
 
-void *SDLNet_UDP_RecvExt(UDPsocket sock, UDPpacket *packet, int *recv)
+int SDLNet_UDP_RecvExt(UDPsocket sock, UDPpacket *packet)
 {
-    *recv = SDLNet_UDP_Recv(sock, packet);
+    int recv = SDLNet_UDP_Recv(sock, packet);
 
     const char *host = SDLNet_ResolveIP(&packet->address);
     unsigned short port = SDLNet_Read16(&packet->address.port);
 
     SDL_Log("UDP: Received %d bytes from %s:%d", packet->len, host, port);
 
-    return packet->data;
+    return recv;
 }

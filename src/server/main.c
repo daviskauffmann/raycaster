@@ -26,6 +26,7 @@ const char *server_host = NULL;
 unsigned short server_port;
 
 TCPsocket tcp_socket = NULL;
+TCPpacket *tcp_packet = NULL;
 
 UDPsocket udp_socket = NULL;
 UDPpacket *udp_packet = NULL;
@@ -75,6 +76,15 @@ int main(int argc, char *args[])
 
     SDL_Log("Listening on port %d", SERVER_PORT);
 
+    tcp_packet = SDLNet_TCP_AllocPacket(PACKET_SIZE);
+
+    if (!tcp_packet)
+    {
+        SDL_Log("SDLNet_TCP_AllocPacket: %s", SDLNet_GetError());
+
+        return 1;
+    }
+
     udp_socket = SDLNet_UDP_Open(SERVER_PORT);
 
     if (!udp_socket)
@@ -84,7 +94,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    udp_packet = SDLNet_AllocPacket(PACKET_SIZE);
+    udp_packet = SDLNet_UDP_AllocPacket(PACKET_SIZE);
 
     if (!udp_packet)
     {
@@ -213,11 +223,10 @@ int main(int argc, char *args[])
                 {
                     if (SDLNet_SocketReady(clients[i].socket))
                     {
-                        int len;
-                        Data *data = SDLNet_TCP_RecvExt(clients[i].socket, &len);
-
-                        if (len > 0)
+                        if (SDLNet_TCP_RecvExt(clients[i].socket, tcp_packet) == 1)
                         {
+                            Data *data = (Data *)tcp_packet->data;
+
                             switch (data->type)
                             {
                             case DATA_DISCONNECT_REQUEST:
@@ -279,11 +288,10 @@ int main(int argc, char *args[])
             // handle UDP messages
             if (SDLNet_SocketReady(udp_socket))
             {
-                int recv;
-                Data *data = SDLNet_UDP_RecvExt(udp_socket, udp_packet, &recv);
-
-                if (recv == 1)
+                if (SDLNet_UDP_RecvExt(udp_socket, udp_packet) == 1)
                 {
+                    Data *data = (Data *)udp_packet->data;
+
                     switch (data->type)
                     {
                     case DATA_UDP_CONNECT_REQUEST:
@@ -301,8 +309,6 @@ int main(int argc, char *args[])
 
                         SDL_Log("Changing position of client %d by (%lf, %lf)", move_data->id, move_data->dx, move_data->dy);
 
-                        // TODO: perform validation
-
                         // update the player's position
                         player_move(&players[move_data->id], move_data->dx, move_data->dy);
 
@@ -311,7 +317,7 @@ int main(int argc, char *args[])
                         {
                             if (clients[i].id != -1)
                             {
-                                PosData pos_data = pos_data_create(DATA_DISCONNECT_BROADCAST, move_data->id, players[move_data->id].pos_x, players[move_data->id].pos_y);
+                                PosData pos_data = pos_data_create(DATA_MOVEMENT_BROADCAST, move_data->id, players[move_data->id].pos_x, players[move_data->id].pos_y);
                                 SDLNet_UDP_SendExt(udp_socket, udp_packet, clients[i].udp_address, &pos_data, sizeof(pos_data));
                             }
                         }
@@ -326,8 +332,6 @@ int main(int argc, char *args[])
                 }
             }
         }
-
-        // SDL_Delay(100);
     }
 
     for (int i = 0; i < MAX_PLAYERS; i++)
@@ -347,8 +351,9 @@ int main(int argc, char *args[])
     SDLNet_UDP_DelSocket(socket_set, udp_socket);
     SDLNet_TCP_DelSocket(socket_set, tcp_socket);
     SDLNet_FreeSocketSet(socket_set);
-    SDLNet_FreePacket(udp_packet);
+    SDLNet_UDP_FreePacket(udp_packet);
     SDLNet_UDP_Close(udp_socket);
+    SDLNet_TCP_FreePacket(tcp_packet);
     SDLNet_TCP_Close(tcp_socket);
     SDLNet_Quit();
 
