@@ -61,8 +61,6 @@
 
 #define FOG_STRENGTH 0.5
 
-void player_move(double dx, double dy);
-void player_rotate(double angle);
 void comb_sort(int *order, double *dist, int amount);
 unsigned int color_darken(unsigned int color);
 unsigned int color_fog(unsigned int color, double distance);
@@ -76,11 +74,11 @@ const char *server_host = NULL;
 unsigned short server_port;
 
 TCPsocket tcp_socket = NULL;
-SDLNet_SocketSet tcp_sockets = NULL;
-char tcp_buffer[PACKET_SIZE];
 
 UDPsocket udp_socket = NULL;
 UDPpacket *udp_packet = NULL;
+
+SDLNet_SocketSet socket_set = NULL;
 
 IMG_Image *textures[NUM_TEXTURES];
 IMG_Image *sprites[NUM_SPRITES];
@@ -217,17 +215,6 @@ int main(int argc, char *args[])
 
     SDL_Log("Connected to server %s:%i", server_host, server_port);
 
-    tcp_sockets = SDLNet_AllocSocketSet(1);
-
-    if (!tcp_sockets)
-    {
-        SDL_Log("SDLNet_AllocSocketSet: %s", SDLNet_GetError());
-
-        return 1;
-    }
-
-    SDLNet_TCP_AddSocket(tcp_sockets, tcp_socket);
-
     udp_socket = SDLNet_UDP_Open(0);
 
     if (!udp_socket)
@@ -246,27 +233,36 @@ int main(int argc, char *args[])
         return 1;
     }
 
+    socket_set = SDLNet_AllocSocketSet(2);
+
+    if (!socket_set)
+    {
+        SDL_Log("SDLNet_AllocSocketSet: %s", SDLNet_GetError());
+
+        return 1;
+    }
+
+    SDLNet_TCP_AddSocket(socket_set, tcp_socket);
+    SDLNet_UDP_AddSocket(socket_set, udp_socket);
+
     // check the server's response to the connection
     {
-        int len = SDLNet_TCP_Recv(tcp_socket, tcp_buffer, sizeof(tcp_buffer));
+        int len;
+        SDLNet_Data *data = SDLNet_TCP_RecvData(tcp_socket, &len);
 
         if (len > 0)
         {
-            int type = ((SDLNet_Data *)tcp_buffer)->type;
-
-            SDL_Log("TCP: Received %d bytes of type %d from %s:%d", len, type, server_host, server_port);
-
-            switch (type)
+            switch (data->type)
             {
             case DATA_CONNECT_OK:
             {
-                int id = ((SDLNet_StateData *)tcp_buffer)->id;
+                int id = ((SDLNet_StateData *)data)->id;
 
                 SDL_Log("Server assigned ID: %d", id);
 
                 for (int i = 0; i < MAX_PLAYERS; i++)
                 {
-                    players[i] = ((SDLNet_StateData *)tcp_buffer)->players[i];
+                    players[i] = ((SDLNet_StateData *)data)->players[i];
                 }
 
                 player = &players[id];
@@ -320,19 +316,16 @@ int main(int argc, char *args[])
     while (!quit)
     {
         // handle TCP messages
-        if (SDLNet_CheckSockets(tcp_sockets, 0) > 0)
+        if (SDLNet_CheckSockets(socket_set, 0) > 0)
         {
             if (SDLNet_SocketReady(tcp_socket))
             {
-                int len = SDLNet_TCP_Recv(tcp_socket, tcp_buffer, sizeof(tcp_buffer));
+                int len;
+                SDLNet_Data *data = SDLNet_TCP_RecvData(tcp_socket, &len);
 
                 if (len > 0)
                 {
-                    int type = ((SDLNet_Data *)tcp_buffer)->type;
-
-                    SDL_Log("TCP: Received %d bytes of type %d from %s:%d", len, type, server_host, server_port);
-
-                    switch (type)
+                    switch (data->type)
                     {
                     default:
                     {
@@ -342,25 +335,24 @@ int main(int argc, char *args[])
                     }
                 }
             }
-        }
 
-        // handle UDP messages
-        while (SDLNet_UDP_Recv(udp_socket, udp_packet) != 0)
-        {
-            // get info about the packet
-            int type = ((SDLNet_Data *)udp_packet->data)->type;
-            const char *host = SDLNet_ResolveIP(&udp_packet->address);
-            unsigned short port = SDLNet_Read16(&udp_packet->address.port);
-
-            SDL_Log("UDP: Received %d bytes of type %d from %s:%d", udp_packet->len, type, host, port);
-
-            switch (type)
+            // handle UDP messages
+            if (SDLNet_SocketReady(udp_socket))
             {
-            default:
-            {
-                SDL_Log("UDP: Unknown packet type");
-            }
-            break;
+                int recv;
+                SDLNet_Data *data = SDLNet_UDP_RecvData(udp_socket, udp_packet, &recv);
+
+                if (recv == 1)
+                {
+                    switch (data->type)
+                    {
+                    default:
+                    {
+                        SDL_Log("UDP: Unknown packet type");
+                    }
+                    break;
+                    }
+                }
             }
         }
 
@@ -388,7 +380,7 @@ int main(int argc, char *args[])
                 // the constant value is in radians/second
                 double angle = -mouse_dx / 1000.0 * ROTATE_SENSITIVITY;
 
-                player_rotate(angle);
+                player_rotate(player, angle);
             }
             break;
             case SDL_KEYDOWN:
@@ -509,7 +501,7 @@ int main(int argc, char *args[])
             (keys[SDL_SCANCODE_S] && keys[SDL_SCANCODE_D]) ||
             (keys[SDL_SCANCODE_S] && keys[SDL_SCANCODE_A]))
         {
-            // precompute 1 / sqrt(2)
+            // precomputed 1 / sqrt(2)
             move_speed *= 0.71;
         }
 
@@ -519,10 +511,10 @@ int main(int argc, char *args[])
             double dx = player->dir_x * move_speed;
             double dy = player->dir_y * move_speed;
 
-            player_move(dx, dy);
+            player_move(player, dx, dy);
 
-            // Net_PosData pos_data = Net_CreatePosData(DATA_MOVEMENT_REQUEST, player->id, player->pos_x, player->pos_y);
-            // Net_UDP_Send(udp_socket, udp_packet, server_address, (Net_Data *)&pos_data, sizeof(pos_data));
+            SDLNet_MoveData move_data = SDLNet_CreateMoveData(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
+            SDLNet_UDP_SendData(udp_socket, udp_packet, server_address, (SDLNet_Data *)&move_data, sizeof(move_data));
         }
 
         // strafe left
@@ -531,7 +523,7 @@ int main(int argc, char *args[])
             double dx = -player->dir_y * move_speed;
             double dy = player->dir_x * move_speed;
 
-            player_move(dx, dy);
+            player_move(player, dx, dy);
         }
 
         // move backward
@@ -540,7 +532,7 @@ int main(int argc, char *args[])
             double dx = -player->dir_x * move_speed;
             double dy = -player->dir_y * move_speed;
 
-            player_move(dx, dy);
+            player_move(player, dx, dy);
         }
 
         // strafe right
@@ -549,7 +541,7 @@ int main(int argc, char *args[])
             double dx = player->dir_y * move_speed;
             double dy = -player->dir_x * move_speed;
 
-            player_move(dx, dy);
+            player_move(player, dx, dy);
         }
 
         // calculate rotation angle
@@ -558,12 +550,12 @@ int main(int argc, char *args[])
 
         if (keys[SDL_SCANCODE_Q])
         {
-            player_rotate(angle);
+            player_rotate(player, angle);
         }
 
         if (keys[SDL_SCANCODE_E])
         {
-            player_rotate(-angle);
+            player_rotate(player, -angle);
         }
 
         // shooting
@@ -1133,10 +1125,11 @@ int main(int argc, char *args[])
         SDLNet_TCP_SendData(tcp_socket, &data, sizeof(data));
     }
 
+    SDLNet_UDP_DelSocket(socket_set, udp_socket);
+    SDLNet_TCP_DelSocket(socket_set, tcp_socket);
+    SDLNet_FreeSocketSet(socket_set);
     SDLNet_FreePacket(udp_packet);
     SDLNet_UDP_Close(udp_socket);
-    SDLNet_TCP_DelSocket(tcp_sockets, tcp_socket);
-    SDLNet_FreeSocketSet(tcp_sockets);
     SDLNet_TCP_Close(tcp_socket);
     SDLNet_Quit();
 
@@ -1171,33 +1164,6 @@ int main(int argc, char *args[])
     SDL_Quit();
 
     return 0;
-}
-
-void player_move(double dx, double dy)
-{
-    if (wall_map[(int)(player->pos_x + dx)][(int)(player->pos_y)] == 0)
-    {
-        player->pos_x += dx;
-    }
-    if (wall_map[(int)(player->pos_x)][(int)(player->pos_y + dy)] == 0)
-    {
-        player->pos_y += dy;
-    }
-}
-
-void player_rotate(double angle)
-{
-    double rot_x = cos(angle);
-    double rot_y = sin(angle);
-
-    // both camera direction and camera plane must be rotated
-    double old_dir_x = player->dir_x;
-    player->dir_x = player->dir_x * rot_x - player->dir_y * rot_y;
-    player->dir_y = old_dir_x * rot_y + player->dir_y * rot_x;
-
-    double old_plane_x = player->plane_x;
-    player->plane_x = player->plane_x * rot_x - player->plane_y * rot_y;
-    player->plane_y = old_plane_x * rot_y + player->plane_y * rot_x;
 }
 
 void comb_sort(int *order, double *dist, int amount)

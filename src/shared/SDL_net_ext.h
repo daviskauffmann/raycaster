@@ -53,6 +53,14 @@ typedef struct
 {
     SDLNet_Data data;
     int id;
+    double dx;
+    double dy;
+} SDLNet_MoveData;
+
+typedef struct
+{
+    SDLNet_Data data;
+    int id;
     double pos_x;
     double pos_y;
 } SDLNet_PosData;
@@ -61,9 +69,13 @@ SDLNet_Data SDLNet_CreateData(SDLNet_DataType type);
 SDLNet_IdData SDLNet_CreateIdData(SDLNet_DataType type, int id);
 SDLNet_StateData SDLNet_CreateStateData(SDLNet_DataType type, int id);
 SDLNet_PlayerData SDLNet_CreatePlayerData(SDLNet_DataType type, Player player);
+SDLNet_MoveData SDLNet_CreateMoveData(SDLNet_DataType type, int id, double dx, double dy);
 SDLNet_PosData SDLNet_CreatePosData(SDLNet_DataType type, int id, double pos_x, double pos_y);
 
 int SDLNet_TCP_SendData(TCPsocket sock, SDLNet_Data *data, int len);
+SDLNet_Data *SDLNet_TCP_RecvData(TCPsocket sock, int *len);
+
 int SDLNet_UDP_SendData(UDPsocket sock, UDPpacket *packet, IPaddress address, SDLNet_Data *data, int len);
+SDLNet_Data *SDLNet_UDP_RecvData(UDPsocket sock, UDPpacket *packet, int *recv);
 
 #endif

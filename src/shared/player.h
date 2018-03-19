@@ -16,4 +16,7 @@ typedef struct
 
 extern Player players[MAX_PLAYERS];
 
+void player_move(Player *player, double dx, double dy);
+void player_rotate(Player *player, double angle);
+
 #endif
