@@ -62,10 +62,6 @@
 
 #define FOG_STRENGTH 0.5
 
-void comb_sort(int *order, double *dist, int amount);
-unsigned int color_darken(unsigned int color);
-unsigned int color_fog(unsigned int color, double distance);
-
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *screen = NULL;
@@ -104,6 +100,10 @@ bool foggy = true;
 
 unsigned int pixel_buffer[SCREEN_WIDTH * SCREEN_HEIGHT];
 double depth_buffer[SCREEN_WIDTH * SCREEN_HEIGHT];
+
+static void comb_sort(int *order, double *dist, int amount);
+static unsigned int color_darken(unsigned int color);
+static unsigned int color_fog(unsigned int color, double distance);
 
 int main(int argc, char *args[])
 {
@@ -1182,7 +1182,7 @@ int main(int argc, char *args[])
     return 0;
 }
 
-void comb_sort(int *order, double *dist, int amount)
+static void comb_sort(int *order, double *dist, int amount)
 {
     int gap = amount;
     bool swapped = false;
@@ -1219,35 +1219,36 @@ void comb_sort(int *order, double *dist, int amount)
     }
 }
 
-unsigned int color_darken(unsigned int color)
+static unsigned int color_darken(unsigned int color)
 {
     return (color >> 1) & 0x7f7f7f;
 }
 
 // TODO: optimize
 // this drops the framerate by about 20
-unsigned int color_fog(unsigned int color, double distance)
+static unsigned int color_fog(unsigned int color, double distance)
 {
     // separate the colors
-    int red = (color >> 16) & 0x0FF;
-    int green = (color >> 8) & 0x0FF;
-    int blue = color & 0x0FF;
+    int red = (color >> 16) & 0x0ff;
+    int green = (color >> 8) & 0x0ff;
+    int blue = color & 0x0ff;
 
     // modify the colors
     double fog_intensity = distance * FOG_STRENGTH;
+
     if (fog_intensity > 1)
     {
-        double double_red = (double)red;
-        double double_green = (double)green;
-        double double_blue = (double)blue;
+        double redf = (double)red;
+        double greenf = (double)green;
+        double bluef = (double)blue;
 
-        double_red /= fog_intensity;
-        double_green /= fog_intensity;
-        double_blue /= fog_intensity;
+        redf /= fog_intensity;
+        greenf /= fog_intensity;
+        bluef /= fog_intensity;
 
-        red = (int)double_red;
-        green = (int)double_green;
-        blue = (int)double_blue;
+        red = (int)redf;
+        green = (int)greenf;
+        blue = (int)bluef;
     }
 
     // recombine the colors

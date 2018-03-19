@@ -1,5 +1,6 @@
 /* 
- * A custom extension to SDL_net.
+ * A custom extension to SDL_net that adds some quality-of-life improvments for
+ * myself.
  */
 
 #ifndef SDL_NET_EXT_H

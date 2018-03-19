@@ -66,10 +66,13 @@ int SDLNet_UDP_RecvExt(UDPsocket sock, UDPpacket *packet)
 {
     int recv = SDLNet_UDP_Recv(sock, packet);
 
-    const char *host = SDLNet_ResolveIP(&packet->address);
-    unsigned short port = SDLNet_Read16(&packet->address.port);
+    if (recv == 1)
+    {
+        const char *host = SDLNet_ResolveIP(&packet->address);
+        unsigned short port = SDLNet_Read16(&packet->address.port);
 
-    SDL_Log("UDP: Received %d bytes from %s:%d", packet->len, host, port);
+        SDL_Log("UDP: Received %d bytes from %s:%d", packet->len, host, port);
+    }
 
     return recv;
 }

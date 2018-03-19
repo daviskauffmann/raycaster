@@ -1,6 +1,6 @@
 /* 
- * A small extension to SDL_image. It adds a simple struct for loaded images
- * which allows for fast reading/writing of pixel data.
+ * A small extension to SDL_image. It adds a simple struct for storing loaded
+ * images which allows for faster read/writes of pixel data.
  */
 
 #ifndef SDL_IMAGE_EXT_H
