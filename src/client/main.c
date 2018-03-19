@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../shared/data.h"
 #include "../shared/map.h"
 #include "../shared/player.h"
 #include "../shared/SDL_net_ext.h"
@@ -248,7 +249,7 @@ int main(int argc, char *args[])
     // check the server's response to the connection
     {
         int len;
-        SDLNet_Data *data = SDLNet_TCP_RecvData(tcp_socket, &len);
+        Data *data = SDLNet_TCP_RecvExt(tcp_socket, &len);
 
         if (len > 0)
         {
@@ -256,16 +257,16 @@ int main(int argc, char *args[])
             {
             case DATA_CONNECT_OK:
             {
-                int id = ((SDLNet_StateData *)data)->id;
+                StateData *state_data = (StateData *)data;
 
-                SDL_Log("Server assigned ID: %d", id);
+                SDL_Log("Server assigned ID: %d", state_data->id);
 
                 for (int i = 0; i < MAX_PLAYERS; i++)
                 {
-                    players[i] = ((SDLNet_StateData *)data)->players[i];
+                    players[i] = state_data->players[i];
                 }
 
-                player = &players[id];
+                player = &players[state_data->id];
             }
             break;
             case DATA_CONNECT_FULL:
@@ -288,8 +289,8 @@ int main(int argc, char *args[])
 
     // make a UDP "connection" to the server
     {
-        SDLNet_IdData id_data = SDLNet_CreateIdData(DATA_UDP_CONNECT_REQUEST, player->id);
-        SDLNet_UDP_SendData(udp_socket, udp_packet, server_address, (SDLNet_Data *)&id_data, sizeof(id_data));
+        IdData id_data = id_data_create(DATA_UDP_CONNECT_REQUEST, player->id);
+        SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &id_data, sizeof(id_data));
     }
 
     textures[0] = IMG_LoadAndConvert("assets/images/eagle.png");
@@ -321,7 +322,7 @@ int main(int argc, char *args[])
             if (SDLNet_SocketReady(tcp_socket))
             {
                 int len;
-                SDLNet_Data *data = SDLNet_TCP_RecvData(tcp_socket, &len);
+                Data *data = SDLNet_TCP_RecvExt(tcp_socket, &len);
 
                 if (len > 0)
                 {
@@ -340,7 +341,7 @@ int main(int argc, char *args[])
             if (SDLNet_SocketReady(udp_socket))
             {
                 int recv;
-                SDLNet_Data *data = SDLNet_UDP_RecvData(udp_socket, udp_packet, &recv);
+                Data *data = SDLNet_UDP_RecvExt(udp_socket, udp_packet, &recv);
 
                 if (recv == 1)
                 {
@@ -513,8 +514,8 @@ int main(int argc, char *args[])
 
             player_move(player, dx, dy);
 
-            SDLNet_MoveData move_data = SDLNet_CreateMoveData(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
-            SDLNet_UDP_SendData(udp_socket, udp_packet, server_address, (SDLNet_Data *)&move_data, sizeof(move_data));
+            MoveData move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
+            SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
         // strafe left
@@ -1120,9 +1121,8 @@ int main(int argc, char *args[])
     }
 
     {
-        SDLNet_Data data;
-        data.type = DATA_DISCONNECT_REQUEST;
-        SDLNet_TCP_SendData(tcp_socket, &data, sizeof(data));
+        Data data = data_create(DATA_DISCONNECT_REQUEST);
+        SDLNet_TCP_SendExt(tcp_socket, &data, sizeof(data));
     }
 
     SDLNet_UDP_DelSocket(socket_set, udp_socket);
