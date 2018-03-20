@@ -102,6 +102,7 @@ unsigned int pixel_buffer[SCREEN_WIDTH * SCREEN_HEIGHT];
 double depth_buffer[SCREEN_WIDTH * SCREEN_HEIGHT];
 
 static void comb_sort(int *order, double *dist, int amount);
+void sprite_draw(double pos_x, double pos_y, int sprite_index);
 static unsigned int color_darken(unsigned int color);
 static unsigned int color_fog(unsigned int color, double distance);
 
@@ -336,6 +337,13 @@ int main(int argc, char *args[])
 
                     switch (data->type)
                     {
+                    case DATA_CONNECT_BROADCAST:
+                    {
+                        PlayerData *player_data = (PlayerData *)data;
+
+                        players[player_data->player.id] = player_data->player;
+                    }
+                    break;
                     default:
                     {
                         SDL_Log("TCP: Unknown packet type");
@@ -529,8 +537,8 @@ int main(int argc, char *args[])
 
             player_move(player, dx, dy);
 
-            // MoveData move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
-            // SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
+            MoveData move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
+            SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
         // strafe left
@@ -540,6 +548,9 @@ int main(int argc, char *args[])
             double dy = player->dir_x * move_speed;
 
             player_move(player, dx, dy);
+
+            MoveData move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
+            SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
         // move backward
@@ -549,6 +560,9 @@ int main(int argc, char *args[])
             double dy = -player->dir_y * move_speed;
 
             player_move(player, dx, dy);
+
+            MoveData move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
+            SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
         // strafe right
@@ -558,6 +572,9 @@ int main(int argc, char *args[])
             double dy = -player->dir_x * move_speed;
 
             player_move(player, dx, dy);
+
+            MoveData move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
+            SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
         // calculate rotation angle
@@ -942,104 +959,34 @@ int main(int argc, char *args[])
             {
                 Object object = objects[object_order[i]];
 
-                // translate object position to relative to camera
-                double object_x = object.x - player->pos_x;
-                double object_y = object.y - player->pos_y;
+                sprite_draw(object.x, object.y, object.sprite_index);
+            }
+        }
 
-                // transform object with the inverse camera matrix
-                // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
-                // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
-                // [ planeY   dirY ]                                          [ -planeY  planeX ]
-                // required for correct matrix multiplication
-                double inv_det = 1 / (player->plane_x * player->dir_y - player->dir_x * player->plane_y);
+        {
+            // arrays used to sort the players
+            int player_order[MAX_PLAYERS];
+            double player_dist[MAX_PLAYERS];
 
-                // transform_y is actually the depth inside the screen, that what Z is in 3D
-                double transform_x = inv_det * (player->dir_y * object_x - player->dir_x * object_y);
-                double transform_y = inv_det * (-player->plane_y * object_x + player->plane_x * object_y);
+            // sort players from far to close
+            for (int i = 0; i < MAX_PLAYERS; i++)
+            {
+                player_order[i] = i;
+                player_dist[i] = pow(player->pos_x - players[i].pos_x, 2) + pow(player->pos_y - players[i].pos_y, 2);
+            }
+            comb_sort(player_order, player_dist, MAX_PLAYERS);
 
-                // where the object is on the screen
-                int object_screen_x = (int)((w / 2) * (1 + transform_x / transform_y));
+            // after sorting the players, do the projection and draw them
+            for (int i = 0; i < MAX_PLAYERS; i++)
+            {
+                Player object = players[player_order[i]];
 
-                // calculate width and height of the object on screen
-                // using transform_y instead of the real distance prevents fisheye
-                int object_width = abs((int)(h / transform_y * SPRITE_SCALE_X));
-                int object_height = abs((int)(h / transform_y * SPRITE_SCALE_Y));
-
-                // calculate the vertical stripes to draw the object
-                int draw_start_x = -object_width / 2 + object_screen_x;
-                if (draw_start_x < 0)
+                if (object.id == -1 || object.id == player->id)
                 {
-                    draw_start_x = 0;
-                }
-                int draw_end_x = object_width / 2 + object_screen_x;
-                if (draw_end_x >= w)
-                {
-                    draw_end_x = w - 1;
+                    continue;
                 }
 
-                // move the object on the screen
-                int translate_y = (int)(SPRITE_TRANSLATE_Y / transform_y);
-
-                // calculate lowest and highest pixel to fill in current stripe
-                int draw_start_y = -object_height / 2 + h / 2 + translate_y;
-                if (draw_start_y < 0)
-                {
-                    draw_start_y = 0;
-                }
-                int draw_end_y = object_height / 2 + h / 2 + translate_y;
-                if (draw_end_y >= h)
-                {
-                    draw_end_y = h - 1;
-                }
-
-                // calculate angle of object to player
-                // double angle = atan2(object_y, object_y);
-
-                // choose the sprite
-                int sprite_index = object.sprite_index;
-                IMG_Image *sprite = sprites[sprite_index];
-
-                // loop through every vertical stripe of the sprite on screen
-                for (int x = draw_start_x; x < draw_end_x; x++)
-                {
-                    // x coordinate on the sprite
-                    int sprite_x = (256 * (x - (-object_width / 2 + object_screen_x)) * sprite->w / object_width) / 256;
-
-                    // the conditions in the if are:
-                    // 1) it's in front of camera plane so you don't see things behind you
-                    // 2) it's on the screen (left)
-                    // 3) it's on the screen (right)
-                    if (transform_y > 0 && x > 0 && x < w)
-                    {
-                        for (int y = draw_start_y; y < draw_end_y; y++)
-                        {
-                            // depth_buffer, with perpendicular distance
-                            if (transform_y < depth_buffer[x + y * w])
-                            {
-                                // y coordinate on the sprite
-                                int sprite_y = ((((y - translate_y) * 256 - h * 128 + object_height * 128) * sprite->h) / object_height) / 256;
-
-                                // get current color on the sprite
-                                unsigned int color = sprite->pixels[sprite_x + sprite_y * sprite->w];
-
-                                if (foggy)
-                                {
-                                    color = color_fog(color, transform_y);
-                                }
-
-                                // draw the pixel if it isnt't black, black is the invisible color
-                                if ((color & 0x00ffffff) != 0)
-                                {
-                                    // used for translucency
-                                    // unsigned int previous_color = pixel_buffer[x + y * w];
-
-                                    pixel_buffer[x + y * w] = color;
-                                    depth_buffer[x + y * w] = transform_y;
-                                }
-                            }
-                        }
-                    }
-                }
+                sprite_draw(object.pos_x, object.pos_y, 0);
             }
         }
 
@@ -1214,6 +1161,110 @@ static void comb_sort(int *order, double *dist, int amount)
                 order[j] = temp_order;
 
                 swapped = true;
+            }
+        }
+    }
+}
+
+void sprite_draw(double pos_x, double pos_y, int sprite_index)
+{
+    int w = SCREEN_WIDTH;
+    int h = SCREEN_HEIGHT;
+
+    // translate object position to relative to camera
+    double object_x = pos_x - player->pos_x;
+    double object_y = pos_y - player->pos_y;
+
+    // transform object with the inverse camera matrix
+    // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
+    // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
+    // [ planeY   dirY ]                                          [ -planeY  planeX ]
+    // required for correct matrix multiplication
+    double inv_det = 1 / (player->plane_x * player->dir_y - player->dir_x * player->plane_y);
+
+    // transform_y is actually the depth inside the screen, that what Z is in 3D
+    double transform_x = inv_det * (player->dir_y * object_x - player->dir_x * object_y);
+    double transform_y = inv_det * (-player->plane_y * object_x + player->plane_x * object_y);
+
+    // where the object is on the screen
+    int object_screen_x = (int)((w / 2) * (1 + transform_x / transform_y));
+
+    // calculate width and height of the object on screen
+    // using transform_y instead of the real distance prevents fisheye
+    int object_width = abs((int)(h / transform_y * SPRITE_SCALE_X));
+    int object_height = abs((int)(h / transform_y * SPRITE_SCALE_Y));
+
+    // calculate the vertical stripes to draw the object
+    int draw_start_x = -object_width / 2 + object_screen_x;
+    if (draw_start_x < 0)
+    {
+        draw_start_x = 0;
+    }
+    int draw_end_x = object_width / 2 + object_screen_x;
+    if (draw_end_x >= w)
+    {
+        draw_end_x = w - 1;
+    }
+
+    // move the object on the screen
+    int translate_y = (int)(SPRITE_TRANSLATE_Y / transform_y);
+
+    // calculate lowest and highest pixel to fill in current stripe
+    int draw_start_y = -object_height / 2 + h / 2 + translate_y;
+    if (draw_start_y < 0)
+    {
+        draw_start_y = 0;
+    }
+    int draw_end_y = object_height / 2 + h / 2 + translate_y;
+    if (draw_end_y >= h)
+    {
+        draw_end_y = h - 1;
+    }
+
+    // calculate angle of object to player
+    // double angle = atan2(object_y, object_y);
+
+    // choose the sprite
+    IMG_Image *sprite = sprites[sprite_index];
+
+    // loop through every vertical stripe of the sprite on screen
+    for (int x = draw_start_x; x < draw_end_x; x++)
+    {
+        // x coordinate on the sprite
+        int sprite_x = (256 * (x - (-object_width / 2 + object_screen_x)) * sprite->w / object_width) / 256;
+
+        // the conditions in the if are:
+        // 1) it's in front of camera plane so you don't see things behind you
+        // 2) it's on the screen (left)
+        // 3) it's on the screen (right)
+        if (transform_y > 0 && x > 0 && x < w)
+        {
+            for (int y = draw_start_y; y < draw_end_y; y++)
+            {
+                // depth_buffer, with perpendicular distance
+                if (transform_y < depth_buffer[x + y * w])
+                {
+                    // y coordinate on the sprite
+                    int sprite_y = ((((y - translate_y) * 256 - h * 128 + object_height * 128) * sprite->h) / object_height) / 256;
+
+                    // get current color on the sprite
+                    unsigned int color = sprite->pixels[sprite_x + sprite_y * sprite->w];
+
+                    if (foggy)
+                    {
+                        color = color_fog(color, transform_y);
+                    }
+
+                    // draw the pixel if it isnt't black, black is the invisible color
+                    if ((color & 0x00ffffff) != 0)
+                    {
+                        // used for translucency
+                        // unsigned int previous_color = pixel_buffer[x + y * w];
+
+                        pixel_buffer[x + y * w] = color;
+                        depth_buffer[x + y * w] = transform_y;
+                    }
+                }
             }
         }
     }
