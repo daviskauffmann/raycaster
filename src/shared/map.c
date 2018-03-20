@@ -78,7 +78,7 @@ unsigned char ceiling_map[MAP_WIDTH][MAP_HEIGHT] = {
     {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
     {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6}};
 
-Object objects[NUM_OBJECTS] = {
+struct object objects[NUM_OBJECTS] = {
     {20.5, 11.5, 2},
     {18.5, 4.50, 2},
     {10.0, 4.50, 2},

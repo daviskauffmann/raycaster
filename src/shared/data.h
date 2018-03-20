@@ -6,7 +6,8 @@
 
 #define PACKET_SIZE 1024
 
-typedef enum {
+enum data_type
+{
     DATA_CONNECT_OK,
     DATA_CONNECT_FULL,
     DATA_CONNECT_BROADCAST,
@@ -15,54 +16,54 @@ typedef enum {
     DATA_DISCONNECT_BROADCAST,
     DATA_MOVEMENT_REQUEST,
     DATA_MOVEMENT_BROADCAST
-} DataType;
+};
 
-typedef struct
+struct data
 {
-    DataType type;
-} Data;
+    enum data_type type;
+};
 
-typedef struct
+struct id_data
 {
-    Data data;
+    struct data data;
     int id;
-} IdData;
+};
 
-typedef struct
+struct state_data
 {
-    Data data;
+    struct data data;
     int id;
-    Object objects[NUM_OBJECTS];
-    Player players[MAX_PLAYERS];
-} StateData;
+    struct object objects[NUM_OBJECTS];
+    struct player players[MAX_PLAYERS];
+};
 
-typedef struct
+struct player_data
 {
-    Data data;
-    Player player;
-} PlayerData;
+    struct data data;
+    struct player player;
+};
 
-typedef struct
+struct move_data
 {
-    Data data;
+    struct data data;
     int id;
     double dx;
     double dy;
-} MoveData;
+};
 
-typedef struct
+struct pos_data
 {
-    Data data;
+    struct data data;
     int id;
     double pos_x;
     double pos_y;
-} PosData;
+};
 
-Data data_create(DataType type);
-IdData id_data_create(DataType type, int id);
-StateData state_data_create(DataType type, int id);
-PlayerData player_data_create(DataType type, Player player);
-MoveData move_data_create(DataType type, int id, double dx, double dy);
-PosData pos_data_create(DataType type, int id, double pos_x, double pos_y);
+struct data data_create(enum data_type type);
+struct id_data id_data_create(enum data_type type, int id);
+struct state_data state_data_create(enum data_type type, int id);
+struct player_data player_data_create(enum data_type type, struct player player);
+struct move_data move_data_create(enum data_type type, int id, double dx, double dy);
+struct pos_data pos_data_create(enum data_type type, int id, double pos_x, double pos_y);
 
 #endif

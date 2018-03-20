@@ -86,7 +86,7 @@ Mix_Chunk *sounds[NUM_SOUNDS];
 
 TTF_Font *font = NULL;
 
-Player *player;
+struct player *player;
 
 unsigned int previous_time = 0;
 unsigned int current_time = 0;
@@ -261,13 +261,13 @@ int main(int argc, char *args[])
     {
         if (SDLNet_TCP_RecvExt(tcp_socket, tcp_packet) == 1)
         {
-            Data *data = (Data *)tcp_packet->data;
+            struct data *data = (struct data *)tcp_packet->data;
 
             switch (data->type)
             {
             case DATA_CONNECT_OK:
             {
-                StateData *state_data = (StateData *)data;
+                struct state_data *state_data = (struct state_data *)data;
 
                 SDL_Log("Server assigned ID: %d", state_data->id);
 
@@ -299,7 +299,7 @@ int main(int argc, char *args[])
 
     // make a UDP "connection" to the server
     {
-        IdData id_data = id_data_create(DATA_UDP_CONNECT_REQUEST, player->id);
+        struct id_data id_data = id_data_create(DATA_UDP_CONNECT_REQUEST, player->id);
         SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &id_data, sizeof(id_data));
     }
 
@@ -333,15 +333,22 @@ int main(int argc, char *args[])
             {
                 if (SDLNet_TCP_RecvExt(tcp_socket, tcp_packet) == 1)
                 {
-                    Data *data = (Data *)tcp_packet->data;
+                    struct data *data = (struct data *)tcp_packet->data;
 
                     switch (data->type)
                     {
                     case DATA_CONNECT_BROADCAST:
                     {
-                        PlayerData *player_data = (PlayerData *)data;
+                        struct player_data *player_data = (struct player_data *)data;
 
                         players[player_data->player.id] = player_data->player;
+                    }
+                    break;
+                    case DATA_DISCONNECT_BROADCAST:
+                    {
+                        struct id_data *id_data = (struct id_data *)data;
+
+                        players[id_data->id].id = -1;
                     }
                     break;
                     default:
@@ -358,13 +365,13 @@ int main(int argc, char *args[])
             {
                 if (SDLNet_UDP_RecvExt(udp_socket, udp_packet) == 1)
                 {
-                    Data *data = (Data *)udp_packet->data;
+                    struct data *data = (struct data *)udp_packet->data;
 
                     switch (data->type)
                     {
                     case DATA_MOVEMENT_BROADCAST:
                     {
-                        PosData *pos_data = (PosData *)data;
+                        struct pos_data *pos_data = (struct pos_data *)data;
 
                         players[pos_data->id].pos_x = pos_data->pos_x;
                         players[pos_data->id].pos_y = pos_data->pos_y;
@@ -537,7 +544,7 @@ int main(int argc, char *args[])
 
             player_move(player, dx, dy);
 
-            MoveData move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
+            struct move_data move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
             SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
@@ -549,7 +556,7 @@ int main(int argc, char *args[])
 
             player_move(player, dx, dy);
 
-            MoveData move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
+            struct move_data move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
             SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
@@ -561,7 +568,7 @@ int main(int argc, char *args[])
 
             player_move(player, dx, dy);
 
-            MoveData move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
+            struct move_data move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
             SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
@@ -573,7 +580,7 @@ int main(int argc, char *args[])
 
             player_move(player, dx, dy);
 
-            MoveData move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
+            struct move_data move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
             SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
@@ -957,7 +964,7 @@ int main(int argc, char *args[])
             // after sorting the objects, do the projection and draw them
             for (int i = 0; i < NUM_OBJECTS; i++)
             {
-                Object object = objects[object_order[i]];
+                struct object object = objects[object_order[i]];
 
                 sprite_draw(object.x, object.y, object.sprite_index);
             }
@@ -979,7 +986,7 @@ int main(int argc, char *args[])
             // after sorting the players, do the projection and draw them
             for (int i = 0; i < MAX_PLAYERS; i++)
             {
-                Player object = players[player_order[i]];
+                struct player object = players[player_order[i]];
 
                 if (object.id == -1 || object.id == player->id)
                 {
@@ -1083,7 +1090,7 @@ int main(int argc, char *args[])
     }
 
     {
-        Data data = data_create(DATA_DISCONNECT_REQUEST);
+        struct data data = data_create(DATA_DISCONNECT_REQUEST);
         SDLNet_TCP_SendExt(tcp_socket, &data, sizeof(data));
     }
 

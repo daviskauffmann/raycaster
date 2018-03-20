@@ -177,7 +177,7 @@ int main(int argc, char *args[])
 
                         // send the client their info
                         {
-                            StateData state_data = state_data_create(DATA_CONNECT_OK, clients[client_id].id);
+                            struct state_data state_data = state_data_create(DATA_CONNECT_OK, clients[client_id].id);
                             SDLNet_TCP_SendExt(socket, &state_data, sizeof(state_data));
                         }
 
@@ -186,7 +186,7 @@ int main(int argc, char *args[])
                         {
                             if (clients[i].id != -1 && clients[i].id != clients[client_id].id)
                             {
-                                PlayerData player_data = player_data_create(DATA_CONNECT_BROADCAST, players[client_id]);
+                                struct player_data player_data = player_data_create(DATA_CONNECT_BROADCAST, players[client_id]);
                                 SDLNet_TCP_SendExt(clients[i].socket, &player_data, sizeof(player_data));
                             }
                         }
@@ -210,7 +210,7 @@ int main(int argc, char *args[])
                     {
                         SDL_Log("A client tried to connect, but the server is full");
 
-                        Data data = data_create(DATA_CONNECT_FULL);
+                        struct data data = data_create(DATA_CONNECT_FULL);
                         SDLNet_TCP_SendExt(socket, &data, sizeof(data));
                     }
                 }
@@ -225,7 +225,7 @@ int main(int argc, char *args[])
                     {
                         if (SDLNet_TCP_RecvExt(clients[i].socket, tcp_packet) == 1)
                         {
-                            Data *data = (Data *)tcp_packet->data;
+                            struct data *data = (struct data *)tcp_packet->data;
 
                             switch (data->type)
                             {
@@ -243,7 +243,7 @@ int main(int argc, char *args[])
                                 {
                                     if (clients[j].id != -1 && clients[j].id != clients[i].id)
                                     {
-                                        IdData id_data = id_data_create(DATA_DISCONNECT_BROADCAST, clients[i].id);
+                                        struct id_data id_data = id_data_create(DATA_DISCONNECT_BROADCAST, clients[i].id);
                                         SDLNet_TCP_SendExt(clients[j].socket, &id_data, sizeof(id_data));
                                     }
                                 }
@@ -290,13 +290,13 @@ int main(int argc, char *args[])
             {
                 if (SDLNet_UDP_RecvExt(udp_socket, udp_packet) == 1)
                 {
-                    Data *data = (Data *)udp_packet->data;
+                    struct data *data = (struct data *)udp_packet->data;
 
                     switch (data->type)
                     {
                     case DATA_UDP_CONNECT_REQUEST:
                     {
-                        IdData *id_data = (IdData *)data;
+                        struct id_data *id_data = (struct id_data *)data;
 
                         SDL_Log("Saving UDP info of client %d", id_data->id);
 
@@ -305,7 +305,7 @@ int main(int argc, char *args[])
                     break;
                     case DATA_MOVEMENT_REQUEST:
                     {
-                        MoveData *move_data = (MoveData *)data;
+                        struct move_data *move_data = (struct move_data *)data;
 
                         SDL_Log("Changing position of client %d by (%lf, %lf)", move_data->id, move_data->dx, move_data->dy);
 
@@ -317,7 +317,7 @@ int main(int argc, char *args[])
                         {
                             if (clients[i].id != -1)
                             {
-                                PosData pos_data = pos_data_create(DATA_MOVEMENT_BROADCAST, move_data->id, players[move_data->id].pos_x, players[move_data->id].pos_y);
+                                struct pos_data pos_data = pos_data_create(DATA_MOVEMENT_BROADCAST, move_data->id, players[move_data->id].pos_x, players[move_data->id].pos_y);
                                 SDLNet_UDP_SendExt(udp_socket, udp_packet, clients[i].udp_address, &pos_data, sizeof(pos_data));
                             }
                         }

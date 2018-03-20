@@ -3,7 +3,7 @@
 
 #define MAX_PLAYERS 2
 
-typedef struct
+struct player
 {
     int id;
     double pos_x;
@@ -12,11 +12,11 @@ typedef struct
     double dir_y;
     double plane_x;
     double plane_y;
-} Player;
+};
 
-extern Player players[MAX_PLAYERS];
+extern struct player players[MAX_PLAYERS];
 
-void player_move(Player *player, double dx, double dy);
-void player_rotate(Player *player, double angle);
+void player_move(struct player *player, double dx, double dy);
+void player_rotate(struct player *player, double angle);
 
 #endif

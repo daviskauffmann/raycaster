@@ -2,18 +2,18 @@
 #include "map.h"
 #include "player.h"
 
-Data data_create(DataType type)
+struct data data_create(enum data_type type)
 {
-    Data data;
+    struct data data;
 
     data.type = type;
 
     return data;
 }
 
-IdData id_data_create(DataType type, int id)
+struct id_data id_data_create(enum data_type type, int id)
 {
-    IdData id_data;
+    struct id_data id_data;
 
     id_data.data = data_create(type);
     id_data.id = id;
@@ -21,9 +21,9 @@ IdData id_data_create(DataType type, int id)
     return id_data;
 }
 
-StateData state_data_create(DataType type, int id)
+struct state_data state_data_create(enum data_type type, int id)
 {
-    StateData state_data;
+    struct state_data state_data;
 
     state_data.data = data_create(type);
     state_data.id = id;
@@ -39,9 +39,9 @@ StateData state_data_create(DataType type, int id)
     return state_data;
 }
 
-PlayerData player_data_create(DataType type, Player player)
+struct player_data player_data_create(enum data_type type, struct player player)
 {
-    PlayerData player_data;
+    struct player_data player_data;
 
     player_data.data = data_create(type);
     player_data.player = player;
@@ -49,9 +49,9 @@ PlayerData player_data_create(DataType type, Player player)
     return player_data;
 }
 
-MoveData move_data_create(DataType type, int id, double dx, double dy)
+struct move_data move_data_create(enum data_type type, int id, double dx, double dy)
 {
-    MoveData move_data;
+    struct move_data move_data;
 
     move_data.data = data_create(type);
     move_data.id = id;
@@ -61,9 +61,9 @@ MoveData move_data_create(DataType type, int id, double dx, double dy)
     return move_data;
 }
 
-PosData pos_data_create(DataType type, int id, double pos_x, double pos_y)
+struct pos_data pos_data_create(enum data_type type, int id, double pos_x, double pos_y)
 {
-    PosData pos_data;
+    struct pos_data pos_data;
 
     pos_data.data = data_create(type);
     pos_data.id = id;

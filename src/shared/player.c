@@ -3,9 +3,9 @@
 #include "map.h"
 #include "player.h"
 
-Player players[MAX_PLAYERS];
+struct player players[MAX_PLAYERS];
 
-void player_move(Player *player, double dx, double dy)
+void player_move(struct player *player, double dx, double dy)
 {
     if (wall_map[(int)(player->pos_x + dx)][(int)(player->pos_y)] == 0)
     {
@@ -17,7 +17,7 @@ void player_move(Player *player, double dx, double dy)
     }
 }
 
-void player_rotate(Player *player, double angle)
+void player_rotate(struct player *player, double angle)
 {
     double rot_x = cos(angle);
     double rot_y = sin(angle);
