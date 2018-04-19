@@ -14,12 +14,12 @@
 #define SERVER_PORT 1000
 
 // TODO: handle timeouts on clients to automatically disconnect them
-typedef struct
+struct client
 {
     int id;
     TCPsocket socket;
     IPaddress udp_address;
-} Client;
+};
 
 IPaddress server_address;
 const char *server_host = NULL;
@@ -33,7 +33,7 @@ UDPpacket *udp_packet = NULL;
 
 SDLNet_SocketSet socket_set = NULL;
 
-Client clients[MAX_PLAYERS];
+struct client clients[MAX_PLAYERS];
 
 int main(int argc, char *args[])
 {
