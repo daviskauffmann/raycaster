@@ -9,9 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "map.h"
-#include "player.h"
-
 #include "SDL_image_ext.h"
 
 #define SDL_FLAGS SDL_INIT_VIDEO | SDL_INIT_AUDIO
@@ -42,6 +39,10 @@
 #define NUM_TRACKS 1
 #define NUM_SOUNDS 1
 
+#define MAP_WIDTH 24
+#define MAP_HEIGHT 24
+#define NUM_OBJECTS 19
+
 #define MOVE_SPEED 5.0
 #define SPRINT_MULT 2.0
 #define ROTATE_SENSITIVITY 3.0
@@ -56,6 +57,23 @@
 
 #define FOG_STRENGTH 0.5
 
+struct object
+{
+    double x;
+    double y;
+    unsigned char sprite_index;
+};
+
+struct player
+{
+    double pos_x;
+    double pos_y;
+    double dir_x;
+    double dir_y;
+    double plane_x;
+    double plane_y;
+};
+
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *screen = NULL;
@@ -68,10 +86,110 @@ Mix_Chunk *sounds[NUM_SOUNDS];
 
 TTF_Font *font = NULL;
 
-struct player *player;
-
 unsigned int previous_time = 0;
 unsigned int current_time = 0;
+
+unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT] = {
+    {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
+    {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
+    {8, 0, 3, 3, 0, 0, 0, 0, 0, 8, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6},
+    {8, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6},
+    {8, 0, 3, 3, 0, 0, 0, 0, 0, 8, 8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4},
+    {8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 4, 0, 0, 0, 0, 0, 6, 6, 6, 0, 6, 4, 6},
+    {8, 8, 8, 8, 0, 8, 8, 8, 8, 8, 8, 4, 4, 4, 4, 4, 4, 6, 0, 0, 0, 0, 0, 6},
+    {7, 7, 7, 7, 0, 7, 7, 7, 7, 0, 8, 0, 8, 0, 8, 0, 8, 4, 0, 4, 0, 6, 0, 6},
+    {7, 7, 0, 0, 0, 0, 0, 0, 7, 8, 0, 8, 0, 8, 0, 8, 8, 6, 0, 0, 0, 0, 0, 6},
+    {7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 6, 0, 0, 0, 0, 0, 4},
+    {7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 6, 0, 6, 0, 6, 0, 6},
+    {7, 7, 0, 0, 0, 0, 0, 0, 7, 8, 0, 8, 0, 8, 0, 8, 8, 6, 4, 6, 0, 6, 6, 6},
+    {7, 7, 7, 7, 0, 7, 7, 7, 7, 8, 8, 4, 0, 6, 8, 4, 8, 3, 3, 3, 0, 3, 3, 3},
+    {2, 2, 2, 2, 0, 2, 2, 2, 2, 4, 6, 4, 0, 0, 6, 0, 6, 3, 0, 0, 0, 0, 0, 3},
+    {2, 2, 0, 0, 0, 0, 0, 2, 2, 4, 0, 0, 0, 0, 0, 0, 4, 3, 0, 0, 0, 0, 0, 3},
+    {2, 0, 0, 0, 0, 0, 0, 0, 2, 4, 0, 0, 0, 0, 0, 0, 4, 3, 0, 0, 0, 0, 0, 3},
+    {1, 0, 0, 0, 0, 0, 0, 0, 1, 4, 4, 4, 4, 4, 6, 0, 6, 3, 3, 0, 0, 0, 3, 3},
+    {2, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 1, 2, 2, 2, 6, 6, 0, 0, 5, 0, 5, 0, 5},
+    {2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 2, 2, 0, 5, 0, 5, 0, 0, 0, 5, 5},
+    {2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 5, 0, 5, 0, 5, 0, 5, 0, 5},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5},
+    {2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 5, 0, 5, 0, 5, 0, 5, 0, 5},
+    {2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 2, 2, 0, 5, 0, 5, 0, 0, 0, 5, 5},
+    {2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5}};
+
+unsigned char floor_map[MAP_WIDTH][MAP_HEIGHT] = {
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3},
+    {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}};
+
+unsigned char ceiling_map[MAP_WIDTH][MAP_HEIGHT] = {
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6},
+    {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6}};
+
+struct object objects[NUM_OBJECTS] = {
+    {20.5, 11.5, 2},
+    {18.5, 4.50, 2},
+    {10.0, 4.50, 2},
+    {10.0, 12.5, 2},
+    {3.50, 6.50, 2},
+    {3.50, 20.5, 2},
+    {3.50, 14.5, 2},
+    {14.5, 20.5, 2},
+    {18.5, 10.5, 1},
+    {18.5, 11.5, 1},
+    {18.5, 12.5, 1},
+    {21.5, 1.50, 0},
+    {15.5, 1.50, 0},
+    {16.0, 1.80, 0},
+    {16.2, 1.20, 0},
+    {3.50, 2.50, 0},
+    {9.50, 15.5, 0},
+    {10.0, 15.1, 0},
+    {10.5, 15.8, 0},
+};
+
+struct player player;
 
 bool textured = true;
 bool draw_walls = true;
@@ -83,10 +201,12 @@ bool foggy = true;
 unsigned int pixel_buffer[SCREEN_WIDTH * SCREEN_HEIGHT];
 double depth_buffer[SCREEN_WIDTH * SCREEN_HEIGHT];
 
-static void comb_sort(int *order, double *dist, int amount);
+void player_move(double dx, double dy);
+void player_rotate(double angle);
+void comb_sort(int *order, double *dist, int amount);
 void sprite_draw(double pos_x, double pos_y, int sprite_index);
-static unsigned int color_darken(unsigned int color);
-static unsigned int color_fog(unsigned int color, double distance);
+unsigned int color_darken(unsigned int color);
+unsigned int color_fog(unsigned int color, double distance);
 
 int main(int argc, char *args[])
 {
@@ -189,15 +309,14 @@ int main(int argc, char *args[])
 
     font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
 
-    player = malloc(sizeof(struct player));
-    player->pos_x = 22.0;
-    player->pos_y = 11.5;
-    player->dir_x = -1.0;
-    player->dir_y = 0.0;
-    player->plane_x = 0.0;
-    player->plane_y = 1.0;
+    player.pos_x = 22.0;
+    player.pos_y = 11.5;
+    player.dir_x = -1.0;
+    player.dir_y = 0.0;
+    player.plane_x = 0.0;
+    player.plane_y = 1.0;
 
-    SDL_Log("FOV: %f", 2 * atan(player->plane_y) / M_PI * 180.0);
+    SDL_Log("FOV: %f", 2 * atan(player.plane_y) / M_PI * 180.0);
 
     bool quit = false;
 
@@ -227,7 +346,7 @@ int main(int argc, char *args[])
                 // the constant value is in radians/second
                 double angle = -mouse_dx / 1000.0 * ROTATE_SENSITIVITY;
 
-                player_rotate(player, angle);
+                player_rotate(angle);
             }
             break;
             case SDL_KEYDOWN:
@@ -355,37 +474,37 @@ int main(int argc, char *args[])
         // move forward
         if (keys[SDL_SCANCODE_W])
         {
-            double dx = player->dir_x * move_speed;
-            double dy = player->dir_y * move_speed;
+            double dx = player.dir_x * move_speed;
+            double dy = player.dir_y * move_speed;
 
-            player_move(player, dx, dy);
+            player_move(dx, dy);
         }
 
         // strafe left
         if (keys[SDL_SCANCODE_A])
         {
-            double dx = -player->dir_y * move_speed;
-            double dy = player->dir_x * move_speed;
+            double dx = -player.dir_y * move_speed;
+            double dy = player.dir_x * move_speed;
 
-            player_move(player, dx, dy);
+            player_move(dx, dy);
         }
 
         // move backward
         if (keys[SDL_SCANCODE_S])
         {
-            double dx = -player->dir_x * move_speed;
-            double dy = -player->dir_y * move_speed;
+            double dx = -player.dir_x * move_speed;
+            double dy = -player.dir_y * move_speed;
 
-            player_move(player, dx, dy);
+            player_move(dx, dy);
         }
 
         // strafe right
         if (keys[SDL_SCANCODE_D])
         {
-            double dx = player->dir_y * move_speed;
-            double dy = -player->dir_x * move_speed;
+            double dx = player.dir_y * move_speed;
+            double dy = -player.dir_x * move_speed;
 
-            player_move(player, dx, dy);
+            player_move(dx, dy);
         }
 
         // calculate rotation angle
@@ -394,12 +513,12 @@ int main(int argc, char *args[])
 
         if (keys[SDL_SCANCODE_Q])
         {
-            player_rotate(player, angle);
+            player_rotate(angle);
         }
 
         if (keys[SDL_SCANCODE_E])
         {
-            player_rotate(player, -angle);
+            player_rotate(-angle);
         }
 
         // shooting
@@ -415,29 +534,26 @@ int main(int argc, char *args[])
             }
         }
 
-        int w = SCREEN_WIDTH;
-        int h = SCREEN_HEIGHT;
-
         // raycasting
-        for (int x = 0; x < w; x++)
+        for (int x = 0; x < SCREEN_WIDTH; x++)
         {
             // clear the pixel and depth buffers
-            for (int y = 0; y < h; y++)
+            for (int y = 0; y < SCREEN_HEIGHT; y++)
             {
-                pixel_buffer[x + y * w] = 0;
-                depth_buffer[x + y * w] = DBL_MAX;
+                pixel_buffer[x + y * SCREEN_WIDTH] = 0;
+                depth_buffer[x + y * SCREEN_WIDTH] = DBL_MAX;
             }
 
             // calculate x-coordinate in camera space
-            double camera_x = (2.0 * x / w) - 1;
+            double camera_x = (2.0 * x / SCREEN_WIDTH) - 1;
 
             // calculate ray position and direction
-            double ray_dir_x = (camera_x * player->plane_x) + player->dir_x;
-            double ray_dir_y = (camera_x * player->plane_y) + player->dir_y;
+            double ray_dir_x = (camera_x * player.plane_x) + player.dir_x;
+            double ray_dir_y = (camera_x * player.plane_y) + player.dir_y;
 
             // which box of the map we're in
-            int map_x = (int)player->pos_x;
-            int map_y = (int)player->pos_y;
+            int map_x = (int)player.pos_x;
+            int map_y = (int)player.pos_y;
 
             // length of ray from current position to next x or y-side
             double side_dist_x;
@@ -454,22 +570,22 @@ int main(int argc, char *args[])
             // calculate step and initial sideDist
             if (ray_dir_x < 0)
             {
-                side_dist_x = (player->pos_x - map_x) * delta_dist_x;
+                side_dist_x = (player.pos_x - map_x) * delta_dist_x;
                 step_x = -1;
             }
             else
             {
-                side_dist_x = (map_x + 1 - player->pos_x) * delta_dist_x;
+                side_dist_x = (map_x + 1 - player.pos_x) * delta_dist_x;
                 step_x = 1;
             }
             if (ray_dir_y < 0)
             {
-                side_dist_y = (player->pos_y - map_y) * delta_dist_y;
+                side_dist_y = (player.pos_y - map_y) * delta_dist_y;
                 step_y = -1;
             }
             else
             {
-                side_dist_y = (map_y + 1 - player->pos_y) * delta_dist_y;
+                side_dist_y = (map_y + 1 - player.pos_y) * delta_dist_y;
                 step_y = 1;
             }
 
@@ -503,22 +619,22 @@ int main(int argc, char *args[])
             // calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
             double perp_wall_dist =
                 side == 0
-                    ? (map_x - player->pos_x + (1 - step_x) / 2) / ray_dir_x
-                    : (map_y - player->pos_y + (1 - step_y) / 2) / ray_dir_y;
+                    ? (map_x - player.pos_x + (1 - step_x) / 2) / ray_dir_x
+                    : (map_y - player.pos_y + (1 - step_y) / 2) / ray_dir_y;
 
             // calculate height of line to draw on screen
-            int line_height = (int)(h / perp_wall_dist);
+            int line_height = (int)(SCREEN_HEIGHT / perp_wall_dist);
 
             // calculate lowest and highest pixel to fill in current stripe
-            int draw_start = -line_height / 2 + h / 2;
+            int draw_start = -line_height / 2 + SCREEN_HEIGHT / 2;
             if (draw_start < 0)
             {
                 draw_start = 0;
             }
-            int draw_end = line_height / 2 + h / 2;
-            if (draw_end >= h)
+            int draw_end = line_height / 2 + SCREEN_HEIGHT / 2;
+            if (draw_end >= SCREEN_HEIGHT)
             {
-                draw_end = h - 1;
+                draw_end = SCREEN_HEIGHT - 1;
             }
 
             if (textured)
@@ -527,11 +643,11 @@ int main(int argc, char *args[])
                 double wall_x;
                 if (side == 0)
                 {
-                    wall_x = player->pos_y + perp_wall_dist * ray_dir_y;
+                    wall_x = player.pos_y + perp_wall_dist * ray_dir_y;
                 }
                 else
                 {
-                    wall_x = player->pos_x + perp_wall_dist * ray_dir_x;
+                    wall_x = player.pos_x + perp_wall_dist * ray_dir_x;
                 }
                 wall_x -= floor(wall_x);
 
@@ -555,7 +671,7 @@ int main(int argc, char *args[])
                     for (int y = draw_start; y <= draw_end; y++)
                     {
                         // y coordinate on the texture
-                        int texture_y = (((y * 256 - h * 128 + line_height * 128) * texture->h) / line_height) / 256;
+                        int texture_y = (((y * 256 - SCREEN_HEIGHT * 128 + line_height * 128) * texture->h) / line_height) / 256;
 
                         // get the color on the texture
                         unsigned int color = texture->pixels[texture_x + texture_y * texture->w];
@@ -572,8 +688,8 @@ int main(int argc, char *args[])
                         }
 
                         // draw the pixel
-                        pixel_buffer[x + y * w] = color;
-                        depth_buffer[x + y * w] = perp_wall_dist;
+                        pixel_buffer[x + y * SCREEN_WIDTH] = color;
+                        depth_buffer[x + y * SCREEN_WIDTH] = perp_wall_dist;
                     }
                 }
 
@@ -608,17 +724,17 @@ int main(int argc, char *args[])
                     // becomes < 0 when the integer overflows
                     if (draw_end < 0)
                     {
-                        draw_end = h;
+                        draw_end = SCREEN_HEIGHT;
                     }
 
                     // draw the floor from draw_end to the bottom of the screen
-                    for (int y = draw_end + 1; y < h; y++)
+                    for (int y = draw_end + 1; y < SCREEN_HEIGHT; y++)
                     {
-                        double current_dist = h / (2.0 * y - h);
+                        double current_dist = SCREEN_HEIGHT / (2.0 * y - SCREEN_HEIGHT);
                         double weight = current_dist / perp_wall_dist;
 
-                        double current_x = weight * floor_x_wall + (1 - weight) * player->pos_x;
-                        double current_y = weight * floor_y_wall + (1 - weight) * player->pos_y;
+                        double current_x = weight * floor_x_wall + (1 - weight) * player.pos_x;
+                        double current_y = weight * floor_y_wall + (1 - weight) * player.pos_y;
 
                         // floor
                         {
@@ -639,8 +755,8 @@ int main(int argc, char *args[])
                             }
 
                             // draw the pixel
-                            pixel_buffer[x + y * w] = color;
-                            depth_buffer[x + y * w] = current_dist;
+                            pixel_buffer[x + y * SCREEN_WIDTH] = color;
+                            depth_buffer[x + y * SCREEN_WIDTH] = current_dist;
                         }
 
                         // ceiling
@@ -667,8 +783,8 @@ int main(int argc, char *args[])
                             }
 
                             // draw the pixel
-                            pixel_buffer[x + (h - y) * w] = color;
-                            depth_buffer[x + (h - y) * w] = current_dist;
+                            pixel_buffer[x + (SCREEN_HEIGHT - y) * SCREEN_WIDTH] = color;
+                            depth_buffer[x + (SCREEN_HEIGHT - y) * SCREEN_WIDTH] = current_dist;
                         }
                     }
                 }
@@ -718,8 +834,8 @@ int main(int argc, char *args[])
                     // draw the pixels of the stripe as a vertical line
                     for (int y = draw_start; y <= draw_end; y++)
                     {
-                        pixel_buffer[x + y * w] = color;
-                        depth_buffer[x + y * w] = perp_wall_dist;
+                        pixel_buffer[x + y * SCREEN_WIDTH] = color;
+                        depth_buffer[x + y * SCREEN_WIDTH] = perp_wall_dist;
                     }
                 }
 
@@ -735,17 +851,17 @@ int main(int argc, char *args[])
                     }
 
                     // draw the floor
-                    for (int y = draw_end + 1; y < h; y++)
+                    for (int y = draw_end + 1; y < SCREEN_HEIGHT; y++)
                     {
-                        pixel_buffer[x + y * w] = floor_color;
-                        depth_buffer[x + y * w] = perp_wall_dist;
+                        pixel_buffer[x + y * SCREEN_WIDTH] = floor_color;
+                        depth_buffer[x + y * SCREEN_WIDTH] = perp_wall_dist;
                     }
 
                     // draw the ceiling
                     for (int y = 0; y < draw_start; y++)
                     {
-                        pixel_buffer[x + y * w] = ceiling_color;
-                        depth_buffer[x + y * w] = perp_wall_dist;
+                        pixel_buffer[x + y * SCREEN_WIDTH] = ceiling_color;
+                        depth_buffer[x + y * SCREEN_WIDTH] = perp_wall_dist;
                     }
                 }
             }
@@ -761,7 +877,7 @@ int main(int argc, char *args[])
             for (int i = 0; i < NUM_OBJECTS; i++)
             {
                 object_order[i] = i;
-                object_dist[i] = pow(player->pos_x - objects[i].x, 2) + pow(player->pos_y - objects[i].y, 2);
+                object_dist[i] = pow(player.pos_x - objects[i].x, 2) + pow(player.pos_y - objects[i].y, 2);
             }
             comb_sort(object_order, object_dist, NUM_OBJECTS);
 
@@ -781,7 +897,7 @@ int main(int argc, char *args[])
             screen,
             NULL,
             pixel_buffer,
-            w * sizeof(unsigned int));
+            SCREEN_WIDTH * sizeof(unsigned int));
         SDL_RenderCopy(renderer, screen, NULL, NULL);
 
         // calculate fps
@@ -814,9 +930,9 @@ int main(int argc, char *args[])
 
         // display position
         {
-            int pos_text_len = snprintf(NULL, 0, "Pos: (%f, %f)", player->pos_x, player->pos_y);
+            int pos_text_len = snprintf(NULL, 0, "Pos: (%f, %f)", player.pos_x, player.pos_y);
             char *pos_text_buffer = malloc(pos_text_len + 1);
-            sprintf_s(pos_text_buffer, pos_text_len + 1, "Pos: (%f, %f)", player->pos_x, player->pos_y);
+            sprintf_s(pos_text_buffer, pos_text_len + 1, "Pos: (%f, %f)", player.pos_x, player.pos_y);
             SDL_Surface *pos_text_surface = TTF_RenderText_Solid(font, pos_text_buffer, (SDL_Color){255, 255, 255, 255});
             SDL_Texture *pos_text_texture = SDL_CreateTextureFromSurface(renderer, pos_text_surface);
             SDL_FreeSurface(pos_text_surface);
@@ -831,9 +947,9 @@ int main(int argc, char *args[])
 
         // display direction
         {
-            int dir_text_len = snprintf(NULL, 0, "Dir: (%f, %f)", player->dir_x, player->dir_y);
+            int dir_text_len = snprintf(NULL, 0, "Dir: (%f, %f)", player.dir_x, player.dir_y);
             char *dir_text_buffer = malloc(dir_text_len + 1);
-            sprintf_s(dir_text_buffer, dir_text_len + 1, "Dir: (%f, %f)", player->dir_x, player->dir_y);
+            sprintf_s(dir_text_buffer, dir_text_len + 1, "Dir: (%f, %f)", player.dir_x, player.dir_y);
             SDL_Surface *dir_text_surface = TTF_RenderText_Solid(font, dir_text_buffer, (SDL_Color){255, 255, 255, 255});
             SDL_Texture *dir_text_texture = SDL_CreateTextureFromSurface(renderer, dir_text_surface);
             SDL_FreeSurface(dir_text_surface);
@@ -848,9 +964,9 @@ int main(int argc, char *args[])
 
         // display camera plane
         {
-            int plane_text_len = snprintf(NULL, 0, "Plane: (%f, %f)", player->plane_x, player->plane_y);
+            int plane_text_len = snprintf(NULL, 0, "Plane: (%f, %f)", player.plane_x, player.plane_y);
             char *plane_text_buffer = malloc(plane_text_len + 1);
-            sprintf_s(plane_text_buffer, plane_text_len + 1, "Plane: (%f, %f)", player->plane_x, player->plane_y);
+            sprintf_s(plane_text_buffer, plane_text_len + 1, "Plane: (%f, %f)", player.plane_x, player.plane_y);
             SDL_Surface *plane_text_surface = TTF_RenderText_Solid(font, plane_text_buffer, (SDL_Color){255, 255, 255, 255});
             SDL_Texture *plane_text_texture = SDL_CreateTextureFromSurface(renderer, plane_text_surface);
             SDL_FreeSurface(plane_text_surface);
@@ -899,7 +1015,34 @@ int main(int argc, char *args[])
     return 0;
 }
 
-static void comb_sort(int *order, double *dist, int amount)
+void player_move(double dx, double dy)
+{
+    if (wall_map[(int)(player.pos_x + dx)][(int)(player.pos_y)] == 0)
+    {
+        player.pos_x += dx;
+    }
+    if (wall_map[(int)(player.pos_x)][(int)(player.pos_y + dy)] == 0)
+    {
+        player.pos_y += dy;
+    }
+}
+
+void player_rotate(double angle)
+{
+    double rot_x = cos(angle);
+    double rot_y = sin(angle);
+
+    // both camera direction and camera plane must be rotated
+    double old_dir_x = player.dir_x;
+    player.dir_x = player.dir_x * rot_x - player.dir_y * rot_y;
+    player.dir_y = old_dir_x * rot_y + player.dir_y * rot_x;
+
+    double old_plane_x = player.plane_x;
+    player.plane_x = player.plane_x * rot_x - player.plane_y * rot_y;
+    player.plane_y = old_plane_x * rot_y + player.plane_y * rot_x;
+}
+
+void comb_sort(int *order, double *dist, int amount)
 {
     int gap = amount;
     bool swapped = false;
@@ -938,31 +1081,28 @@ static void comb_sort(int *order, double *dist, int amount)
 
 void sprite_draw(double pos_x, double pos_y, int sprite_index)
 {
-    int w = SCREEN_WIDTH;
-    int h = SCREEN_HEIGHT;
-
     // translate object position to relative to camera
-    double object_x = pos_x - player->pos_x;
-    double object_y = pos_y - player->pos_y;
+    double object_x = pos_x - player.pos_x;
+    double object_y = pos_y - player.pos_y;
 
     // transform object with the inverse camera matrix
     // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
     // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
     // [ planeY   dirY ]                                          [ -planeY  planeX ]
     // required for correct matrix multiplication
-    double inv_det = 1 / (player->plane_x * player->dir_y - player->dir_x * player->plane_y);
+    double inv_det = 1 / (player.plane_x * player.dir_y - player.dir_x * player.plane_y);
 
     // transform_y is actually the depth inside the screen, that what Z is in 3D
-    double transform_x = inv_det * (player->dir_y * object_x - player->dir_x * object_y);
-    double transform_y = inv_det * (-player->plane_y * object_x + player->plane_x * object_y);
+    double transform_x = inv_det * (player.dir_y * object_x - player.dir_x * object_y);
+    double transform_y = inv_det * (-player.plane_y * object_x + player.plane_x * object_y);
 
     // where the object is on the screen
-    int object_screen_x = (int)((w / 2) * (1 + transform_x / transform_y));
+    int object_screen_x = (int)((SCREEN_WIDTH / 2) * (1 + transform_x / transform_y));
 
     // calculate width and height of the object on screen
     // using transform_y instead of the real distance prevents fisheye
-    int object_width = abs((int)(h / transform_y * SPRITE_SCALE_X));
-    int object_height = abs((int)(h / transform_y * SPRITE_SCALE_Y));
+    int object_width = abs((int)(SCREEN_HEIGHT / transform_y * SPRITE_SCALE_X));
+    int object_height = abs((int)(SCREEN_HEIGHT / transform_y * SPRITE_SCALE_Y));
 
     // calculate the vertical stripes to draw the object
     int draw_start_x = -object_width / 2 + object_screen_x;
@@ -971,24 +1111,24 @@ void sprite_draw(double pos_x, double pos_y, int sprite_index)
         draw_start_x = 0;
     }
     int draw_end_x = object_width / 2 + object_screen_x;
-    if (draw_end_x >= w)
+    if (draw_end_x >= SCREEN_WIDTH)
     {
-        draw_end_x = w - 1;
+        draw_end_x = SCREEN_WIDTH - 1;
     }
 
     // move the object on the screen
     int translate_y = (int)(SPRITE_TRANSLATE_Y / transform_y);
 
     // calculate lowest and highest pixel to fill in current stripe
-    int draw_start_y = -object_height / 2 + h / 2 + translate_y;
+    int draw_start_y = -object_height / 2 + SCREEN_HEIGHT / 2 + translate_y;
     if (draw_start_y < 0)
     {
         draw_start_y = 0;
     }
-    int draw_end_y = object_height / 2 + h / 2 + translate_y;
-    if (draw_end_y >= h)
+    int draw_end_y = object_height / 2 + SCREEN_HEIGHT / 2 + translate_y;
+    if (draw_end_y >= SCREEN_HEIGHT)
     {
-        draw_end_y = h - 1;
+        draw_end_y = SCREEN_HEIGHT - 1;
     }
 
     // calculate angle of object to player
@@ -1007,15 +1147,15 @@ void sprite_draw(double pos_x, double pos_y, int sprite_index)
         // 1) it's in front of camera plane so you don't see things behind you
         // 2) it's on the screen (left)
         // 3) it's on the screen (right)
-        if (transform_y > 0 && x > 0 && x < w)
+        if (transform_y > 0 && x > 0 && x < SCREEN_WIDTH)
         {
             for (int y = draw_start_y; y < draw_end_y; y++)
             {
                 // depth_buffer, with perpendicular distance
-                if (transform_y < depth_buffer[x + y * w])
+                if (transform_y < depth_buffer[x + y * SCREEN_WIDTH])
                 {
                     // y coordinate on the sprite
-                    int sprite_y = ((((y - translate_y) * 256 - h * 128 + object_height * 128) * sprite->h) / object_height) / 256;
+                    int sprite_y = ((((y - translate_y) * 256 - SCREEN_HEIGHT * 128 + object_height * 128) * sprite->h) / object_height) / 256;
 
                     // get current color on the sprite
                     unsigned int color = sprite->pixels[sprite_x + sprite_y * sprite->w];
@@ -1031,8 +1171,8 @@ void sprite_draw(double pos_x, double pos_y, int sprite_index)
                         // used for translucency
                         // unsigned int previous_color = pixel_buffer[x + y * w];
 
-                        pixel_buffer[x + y * w] = color;
-                        depth_buffer[x + y * w] = transform_y;
+                        pixel_buffer[x + y * SCREEN_WIDTH] = color;
+                        depth_buffer[x + y * SCREEN_WIDTH] = transform_y;
                     }
                 }
             }
@@ -1040,14 +1180,14 @@ void sprite_draw(double pos_x, double pos_y, int sprite_index)
     }
 }
 
-static unsigned int color_darken(unsigned int color)
+unsigned int color_darken(unsigned int color)
 {
     return (color >> 1) & 0x7f7f7f;
 }
 
 // TODO: optimize
 // this drops the framerate by about 20
-static unsigned int color_fog(unsigned int color, double distance)
+unsigned int color_fog(unsigned int color, double distance)
 {
     // separate the colors
     int red = (color >> 16) & 0x0ff;
