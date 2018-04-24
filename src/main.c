@@ -1,7 +1,6 @@
 #include <float.h>
 #include <math.h>
 #include <SDL/SDL_image.h>
-#include <SDL/SDL_net.h>
 #include <SDL/SDL_mixer.h>
 #include <SDL/SDL_ttf.h>
 #include <SDL/SDL.h>
@@ -10,10 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../shared/data.h"
-#include "../shared/map.h"
-#include "../shared/player.h"
-#include "../shared/SDL_net_ext.h"
+#include "map.h"
+#include "player.h"
 
 #include "SDL_image_ext.h"
 
@@ -40,9 +37,6 @@
 #define AUDIO_CHANNELS 2
 #define AUDIO_CHUNK_SIZE 1024
 
-#define SERVER_HOST "127.0.0.1"
-#define SERVER_PORT 1000
-
 #define NUM_TEXTURES 8
 #define NUM_SPRITES 3
 #define NUM_TRACKS 1
@@ -65,18 +59,6 @@
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *screen = NULL;
-
-IPaddress server_address;
-const char *server_host = NULL;
-unsigned short server_port;
-
-TCPsocket tcp_socket = NULL;
-TCPpacket *tcp_packet = NULL;
-
-UDPsocket udp_socket = NULL;
-UDPpacket *udp_packet = NULL;
-
-SDLNet_SocketSet socket_set = NULL;
 
 IMG_Image *textures[NUM_TEXTURES];
 IMG_Image *sprites[NUM_SPRITES];
@@ -190,119 +172,6 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    if (SDLNet_Init() != 0)
-    {
-        SDL_Log("SDLNet_Init: %s", SDLNet_GetError());
-
-        return 1;
-    }
-
-    if (SDLNet_ResolveHost(&server_address, SERVER_HOST, SERVER_PORT) != 0)
-    {
-        SDL_Log("SDLNet_ResolveHost: %s", SDLNet_GetError());
-
-        return 1;
-    }
-
-    server_host = SDLNet_ResolveIP(&server_address);
-    server_port = SDLNet_Read16(&server_address.port);
-
-    tcp_socket = SDLNet_TCP_Open(&server_address);
-
-    if (!tcp_socket)
-    {
-        SDL_Log("SDLNet_TCP_Open: %s", SDLNet_GetError());
-
-        return 1;
-    }
-
-    tcp_packet = SDLNet_TCP_AllocPacket(PACKET_SIZE);
-
-    if (!tcp_packet)
-    {
-        SDL_Log("SDLNet_TCP_AllocPacket: %s", SDLNet_GetError());
-
-        return 1;
-    }
-
-    SDL_Log("Connected to server %s:%i", server_host, server_port);
-
-    udp_socket = SDLNet_UDP_Open(0);
-
-    if (!udp_socket)
-    {
-        SDL_Log("SDLNet_UDP_Open: %s", SDLNet_GetError());
-
-        return 1;
-    }
-
-    udp_packet = SDLNet_AllocPacket(PACKET_SIZE);
-
-    if (!udp_packet)
-    {
-        SDL_Log("SDLNet_UDP_AllocPacket: %s", SDLNet_GetError());
-
-        return 1;
-    }
-
-    socket_set = SDLNet_AllocSocketSet(2);
-
-    if (!socket_set)
-    {
-        SDL_Log("SDLNet_AllocSocketSet: %s", SDLNet_GetError());
-
-        return 1;
-    }
-
-    SDLNet_TCP_AddSocket(socket_set, tcp_socket);
-    SDLNet_UDP_AddSocket(socket_set, udp_socket);
-
-    // check the server's response to the connection
-    {
-        if (SDLNet_TCP_RecvExt(tcp_socket, tcp_packet) == 1)
-        {
-            struct data *data = (struct data *)tcp_packet->data;
-
-            switch (data->type)
-            {
-            case DATA_CONNECT_OK:
-            {
-                struct state_data *state_data = (struct state_data *)data;
-
-                SDL_Log("Server assigned ID: %d", state_data->id);
-
-                for (int i = 0; i < MAX_PLAYERS; i++)
-                {
-                    players[i] = state_data->players[i];
-                }
-
-                player = &players[state_data->id];
-            }
-            break;
-            case DATA_CONNECT_FULL:
-            {
-                SDL_Log("Server is full");
-
-                return 1;
-            }
-            break;
-            default:
-            {
-                SDL_Log("TCP: Unknown packet type");
-
-                return 1;
-            }
-            break;
-            }
-        }
-    }
-
-    // make a UDP "connection" to the server
-    {
-        struct id_data id_data = id_data_create(DATA_UDP_CONNECT_REQUEST, player->id);
-        SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &id_data, sizeof(id_data));
-    }
-
     textures[0] = IMG_LoadAndConvert("assets/images/eagle.png");
     textures[1] = IMG_LoadAndConvert("assets/images/redbrick.png");
     textures[2] = IMG_LoadAndConvert("assets/images/purplestone.png");
@@ -320,73 +189,20 @@ int main(int argc, char *args[])
 
     font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
 
+    player = malloc(sizeof(struct player));
+    player->pos_x = 22.0;
+    player->pos_y = 11.5;
+    player->dir_x = -1.0;
+    player->dir_y = 0.0;
+    player->plane_x = 0.0;
+    player->plane_y = 1.0;
+
     SDL_Log("FOV: %f", 2 * atan(player->plane_y) / M_PI * 180.0);
 
     bool quit = false;
 
     while (!quit)
     {
-        // handle TCP messages
-        if (SDLNet_CheckSockets(socket_set, 0) > 0)
-        {
-            if (SDLNet_SocketReady(tcp_socket))
-            {
-                if (SDLNet_TCP_RecvExt(tcp_socket, tcp_packet) == 1)
-                {
-                    struct data *data = (struct data *)tcp_packet->data;
-
-                    switch (data->type)
-                    {
-                    case DATA_CONNECT_BROADCAST:
-                    {
-                        struct player_data *player_data = (struct player_data *)data;
-
-                        players[player_data->player.id] = player_data->player;
-                    }
-                    break;
-                    case DATA_DISCONNECT_BROADCAST:
-                    {
-                        struct id_data *id_data = (struct id_data *)data;
-
-                        players[id_data->id].id = -1;
-                    }
-                    break;
-                    default:
-                    {
-                        SDL_Log("TCP: Unknown packet type");
-                    }
-                    break;
-                    }
-                }
-            }
-
-            // handle UDP messages
-            if (SDLNet_SocketReady(udp_socket))
-            {
-                if (SDLNet_UDP_RecvExt(udp_socket, udp_packet) == 1)
-                {
-                    struct data *data = (struct data *)udp_packet->data;
-
-                    switch (data->type)
-                    {
-                    case DATA_MOVEMENT_BROADCAST:
-                    {
-                        struct pos_data *pos_data = (struct pos_data *)data;
-
-                        players[pos_data->id].pos_x = pos_data->pos_x;
-                        players[pos_data->id].pos_y = pos_data->pos_y;
-                    }
-                    break;
-                    default:
-                    {
-                        SDL_Log("UDP: Unknown packet type");
-                    }
-                    break;
-                    }
-                }
-            }
-        }
-
         // timing for input and FPS counter
         previous_time = current_time;
         current_time = SDL_GetTicks();
@@ -543,9 +359,6 @@ int main(int argc, char *args[])
             double dy = player->dir_y * move_speed;
 
             player_move(player, dx, dy);
-
-            struct move_data move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
-            SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
         // strafe left
@@ -555,9 +368,6 @@ int main(int argc, char *args[])
             double dy = player->dir_x * move_speed;
 
             player_move(player, dx, dy);
-
-            struct move_data move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
-            SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
         // move backward
@@ -567,9 +377,6 @@ int main(int argc, char *args[])
             double dy = -player->dir_y * move_speed;
 
             player_move(player, dx, dy);
-
-            struct move_data move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
-            SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
         // strafe right
@@ -579,9 +386,6 @@ int main(int argc, char *args[])
             double dy = -player->dir_x * move_speed;
 
             player_move(player, dx, dy);
-
-            struct move_data move_data = move_data_create(DATA_MOVEMENT_REQUEST, player->id, dx, dy);
-            SDLNet_UDP_SendExt(udp_socket, udp_packet, server_address, &move_data, sizeof(move_data));
         }
 
         // calculate rotation angle
@@ -970,33 +774,6 @@ int main(int argc, char *args[])
             }
         }
 
-        {
-            // arrays used to sort the players
-            int player_order[MAX_PLAYERS];
-            double player_dist[MAX_PLAYERS];
-
-            // sort players from far to close
-            for (int i = 0; i < MAX_PLAYERS; i++)
-            {
-                player_order[i] = i;
-                player_dist[i] = pow(player->pos_x - players[i].pos_x, 2) + pow(player->pos_y - players[i].pos_y, 2);
-            }
-            comb_sort(player_order, player_dist, MAX_PLAYERS);
-
-            // after sorting the players, do the projection and draw them
-            for (int i = 0; i < MAX_PLAYERS; i++)
-            {
-                struct player object = players[player_order[i]];
-
-                if (object.id == -1 || object.id == player->id)
-                {
-                    continue;
-                }
-
-                sprite_draw(object.pos_x, object.pos_y, 0);
-            }
-        }
-
         // calculate fps
         static double fps_update_timer = 0.0;
         static int fps = 0;
@@ -1088,20 +865,6 @@ int main(int argc, char *args[])
 
         SDL_RenderPresent(renderer);
     }
-
-    {
-        struct data data = data_create(DATA_DISCONNECT_REQUEST);
-        SDLNet_TCP_SendExt(tcp_socket, &data, sizeof(data));
-    }
-
-    SDLNet_UDP_DelSocket(socket_set, udp_socket);
-    SDLNet_TCP_DelSocket(socket_set, tcp_socket);
-    SDLNet_FreeSocketSet(socket_set);
-    SDLNet_UDP_FreePacket(udp_packet);
-    SDLNet_UDP_Close(udp_socket);
-    SDLNet_TCP_FreePacket(tcp_packet);
-    SDLNet_TCP_Close(tcp_socket);
-    SDLNet_Quit();
 
     TTF_CloseFont(font);
     TTF_Quit();

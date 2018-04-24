@@ -3,8 +3,6 @@
 #include "map.h"
 #include "player.h"
 
-struct player players[MAX_PLAYERS];
-
 void player_move(struct player *player, double dx, double dy)
 {
     if (wall_map[(int)(player->pos_x + dx)][(int)(player->pos_y)] == 0)
