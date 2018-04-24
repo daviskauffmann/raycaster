@@ -343,7 +343,6 @@ int main(int argc, char *args[])
                 // int mouse_dy = event.motion.yrel;
 
                 // calculate rotation angle
-                // the constant value is in radians/second
                 double angle = -mouse_dx / 1000.0 * ROTATE_SENSITIVITY;
 
                 player_rotate(angle);
@@ -1132,7 +1131,7 @@ void sprite_draw(double pos_x, double pos_y, int sprite_index)
     }
 
     // calculate angle of object to player
-    // double angle = atan2(object_y, object_y);
+    // double angle = atan2(object_y, object_x);
 
     // choose the sprite
     IMG_Image *sprite = sprites[sprite_index];
