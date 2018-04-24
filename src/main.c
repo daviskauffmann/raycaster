@@ -774,16 +774,6 @@ int main(int argc, char *args[])
             }
         }
 
-        // calculate fps
-        static double fps_update_timer = 0.0;
-        static int fps = 0;
-        fps_update_timer += delta_time;
-        if (fps_update_timer >= 0.25)
-        {
-            fps_update_timer = 0.0;
-            fps = (int)(1 / delta_time);
-        }
-
         SDL_RenderClear(renderer);
 
         // display pixel buffer
@@ -793,6 +783,16 @@ int main(int argc, char *args[])
             pixel_buffer,
             w * sizeof(unsigned int));
         SDL_RenderCopy(renderer, screen, NULL, NULL);
+
+        // calculate fps
+        static double fps_update_timer = 0.0;
+        static int fps = 0;
+        fps_update_timer += delta_time;
+        if (fps_update_timer >= 0.25)
+        {
+            fps_update_timer = 0.0;
+            fps = (int)(1 / delta_time);
+        }
 
         // display FPS
         {
