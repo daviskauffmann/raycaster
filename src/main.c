@@ -204,7 +204,6 @@ double depth_buffer[SCREEN_WIDTH * SCREEN_HEIGHT];
 void player_move(double dx, double dy);
 void player_rotate(double angle);
 void comb_sort(int *order, double *dist, int amount);
-void sprite_draw(double pos_x, double pos_y, int sprite_index);
 unsigned int color_darken(unsigned int color);
 unsigned int color_fog(unsigned int color, double distance);
 
@@ -885,7 +884,103 @@ int main(int argc, char *args[])
             {
                 struct object object = objects[object_order[i]];
 
-                sprite_draw(object.x, object.y, object.sprite_index);
+                // translate object position to relative to camera
+                double object_x = object.x - player.pos_x;
+                double object_y = object.y - player.pos_y;
+
+                // transform object with the inverse camera matrix
+                // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
+                // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
+                // [ planeY   dirY ]                                          [ -planeY  planeX ]
+                // required for correct matrix multiplication
+                double inv_det = 1 / (player.plane_x * player.dir_y - player.dir_x * player.plane_y);
+
+                // transform_y is actually the depth inside the screen, that what Z is in 3D
+                double transform_x = inv_det * (player.dir_y * object_x - player.dir_x * object_y);
+                double transform_y = inv_det * (-player.plane_y * object_x + player.plane_x * object_y);
+
+                // where the object is on the screen
+                int object_screen_x = (int)((SCREEN_WIDTH / 2) * (1 + transform_x / transform_y));
+
+                // calculate width and height of the object on screen
+                // using transform_y instead of the real distance prevents fisheye
+                int object_width = abs((int)(SCREEN_HEIGHT / transform_y * SPRITE_SCALE_X));
+                int object_height = abs((int)(SCREEN_HEIGHT / transform_y * SPRITE_SCALE_Y));
+
+                // calculate the vertical stripes to draw the object
+                int draw_start_x = -object_width / 2 + object_screen_x;
+                if (draw_start_x < 0)
+                {
+                    draw_start_x = 0;
+                }
+                int draw_end_x = object_width / 2 + object_screen_x;
+                if (draw_end_x >= SCREEN_WIDTH)
+                {
+                    draw_end_x = SCREEN_WIDTH - 1;
+                }
+
+                // move the object on the screen
+                int translate_y = (int)(SPRITE_TRANSLATE_Y / transform_y);
+
+                // calculate lowest and highest pixel to fill in current stripe
+                int draw_start_y = -object_height / 2 + SCREEN_HEIGHT / 2 + translate_y;
+                if (draw_start_y < 0)
+                {
+                    draw_start_y = 0;
+                }
+                int draw_end_y = object_height / 2 + SCREEN_HEIGHT / 2 + translate_y;
+                if (draw_end_y >= SCREEN_HEIGHT)
+                {
+                    draw_end_y = SCREEN_HEIGHT - 1;
+                }
+
+                // calculate angle of object to player
+                // double angle = atan2(object_y, object_x);
+
+                // choose the sprite
+                IMG_Image *sprite = sprites[object.sprite_index];
+
+                // loop through every vertical stripe of the sprite on screen
+                for (int x = draw_start_x; x < draw_end_x; x++)
+                {
+                    // x coordinate on the sprite
+                    int sprite_x = (256 * (x - (-object_width / 2 + object_screen_x)) * sprite->w / object_width) / 256;
+
+                    // the conditions in the if are:
+                    // 1) it's in front of camera plane so you don't see things behind you
+                    // 2) it's on the screen (left)
+                    // 3) it's on the screen (right)
+                    if (transform_y > 0 && x > 0 && x < SCREEN_WIDTH)
+                    {
+                        for (int y = draw_start_y; y < draw_end_y; y++)
+                        {
+                            // depth_buffer, with perpendicular distance
+                            if (transform_y < depth_buffer[x + y * SCREEN_WIDTH])
+                            {
+                                // y coordinate on the sprite
+                                int sprite_y = ((((y - translate_y) * 256 - SCREEN_HEIGHT * 128 + object_height * 128) * sprite->h) / object_height) / 256;
+
+                                // get current color on the sprite
+                                unsigned int color = sprite->pixels[sprite_x + sprite_y * sprite->w];
+
+                                if (foggy)
+                                {
+                                    color = color_fog(color, transform_y);
+                                }
+
+                                // draw the pixel if it isnt't black, black is the invisible color
+                                if ((color & 0x00ffffff) != 0)
+                                {
+                                    // used for translucency
+                                    // unsigned int previous_color = pixel_buffer[x + y * w];
+
+                                    pixel_buffer[x + y * SCREEN_WIDTH] = color;
+                                    depth_buffer[x + y * SCREEN_WIDTH] = transform_y;
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -911,71 +1006,66 @@ int main(int argc, char *args[])
 
         // display FPS
         {
-            int fps_text_len = snprintf(NULL, 0, "FPS: %d", fps);
-            char *fps_text_buffer = malloc(fps_text_len + 1);
-            sprintf_s(fps_text_buffer, fps_text_len + 1, "FPS: %d", fps);
-            SDL_Surface *fps_text_surface = TTF_RenderText_Solid(font, fps_text_buffer, (SDL_Color){255, 255, 255, 255});
-            free(fps_text_buffer);
-            SDL_Texture *fps_text_texture = SDL_CreateTextureFromSurface(renderer, fps_text_surface);
-            SDL_FreeSurface(fps_text_surface);
-            SDL_Rect fps_text_rect;
-            fps_text_rect.x = 0;
-            fps_text_rect.y = 0;
-            fps_text_rect.w = 24 * fps_text_len;
-            fps_text_rect.h = 25;
-            SDL_RenderCopy(renderer, fps_text_texture, NULL, &fps_text_rect);
-            SDL_DestroyTexture(fps_text_texture);
+            char buffer[256];
+            sprintf_s(buffer, sizeof(buffer), "FPS: %d", fps);
+            SDL_Surface *text_surface = TTF_RenderText_Solid(font, buffer, (SDL_Color){255, 255, 255, 255});
+            SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
+            SDL_FreeSurface(text_surface);
+            SDL_Rect text_rect;
+            text_rect.x = 0;
+            text_rect.y = 0;
+            text_rect.w = 24 * strlen(buffer);
+            text_rect.h = 25;
+            SDL_RenderCopy(renderer, text_texture, NULL, &text_rect);
+            SDL_DestroyTexture(text_texture);
         }
 
         // display position
         {
-            int pos_text_len = snprintf(NULL, 0, "Pos: (%f, %f)", player.pos_x, player.pos_y);
-            char *pos_text_buffer = malloc(pos_text_len + 1);
-            sprintf_s(pos_text_buffer, pos_text_len + 1, "Pos: (%f, %f)", player.pos_x, player.pos_y);
-            SDL_Surface *pos_text_surface = TTF_RenderText_Solid(font, pos_text_buffer, (SDL_Color){255, 255, 255, 255});
-            SDL_Texture *pos_text_texture = SDL_CreateTextureFromSurface(renderer, pos_text_surface);
-            SDL_FreeSurface(pos_text_surface);
-            SDL_Rect pos_text_rect;
-            pos_text_rect.x = 0;
-            pos_text_rect.y = 25;
-            pos_text_rect.w = 24 * pos_text_len;
-            pos_text_rect.h = 25;
-            SDL_RenderCopy(renderer, pos_text_texture, NULL, &pos_text_rect);
-            SDL_DestroyTexture(pos_text_texture);
+            char buffer[256];
+            sprintf_s(buffer, sizeof(buffer), "Pos: (%f, %f)", player.pos_x, player.pos_y);
+            SDL_Surface *text_surface = TTF_RenderText_Solid(font, buffer, (SDL_Color){255, 255, 255, 255});
+            SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
+            SDL_FreeSurface(text_surface);
+            SDL_Rect text_rect;
+            text_rect.x = 0;
+            text_rect.y = 25;
+            text_rect.w = 24 * strlen(buffer);
+            text_rect.h = 25;
+            SDL_RenderCopy(renderer, text_texture, NULL, &text_rect);
+            SDL_DestroyTexture(text_texture);
         }
 
         // display direction
         {
-            int dir_text_len = snprintf(NULL, 0, "Dir: (%f, %f)", player.dir_x, player.dir_y);
-            char *dir_text_buffer = malloc(dir_text_len + 1);
-            sprintf_s(dir_text_buffer, dir_text_len + 1, "Dir: (%f, %f)", player.dir_x, player.dir_y);
-            SDL_Surface *dir_text_surface = TTF_RenderText_Solid(font, dir_text_buffer, (SDL_Color){255, 255, 255, 255});
-            SDL_Texture *dir_text_texture = SDL_CreateTextureFromSurface(renderer, dir_text_surface);
-            SDL_FreeSurface(dir_text_surface);
-            SDL_Rect dir_text_rect;
-            dir_text_rect.x = 0;
-            dir_text_rect.y = 50;
-            dir_text_rect.w = 24 * dir_text_len;
-            dir_text_rect.h = 25;
-            SDL_RenderCopy(renderer, dir_text_texture, NULL, &dir_text_rect);
-            SDL_DestroyTexture(dir_text_texture);
+            char buffer[256];
+            sprintf_s(buffer, sizeof(buffer), "Dir: (%f, %f)", player.dir_x, player.dir_y);
+            SDL_Surface *text_surface = TTF_RenderText_Solid(font, buffer, (SDL_Color){255, 255, 255, 255});
+            SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
+            SDL_FreeSurface(text_surface);
+            SDL_Rect text_rect;
+            text_rect.x = 0;
+            text_rect.y = 50;
+            text_rect.w = 24 * strlen(buffer);
+            text_rect.h = 25;
+            SDL_RenderCopy(renderer, text_texture, NULL, &text_rect);
+            SDL_DestroyTexture(text_texture);
         }
 
         // display camera plane
         {
-            int plane_text_len = snprintf(NULL, 0, "Plane: (%f, %f)", player.plane_x, player.plane_y);
-            char *plane_text_buffer = malloc(plane_text_len + 1);
-            sprintf_s(plane_text_buffer, plane_text_len + 1, "Plane: (%f, %f)", player.plane_x, player.plane_y);
-            SDL_Surface *plane_text_surface = TTF_RenderText_Solid(font, plane_text_buffer, (SDL_Color){255, 255, 255, 255});
-            SDL_Texture *plane_text_texture = SDL_CreateTextureFromSurface(renderer, plane_text_surface);
-            SDL_FreeSurface(plane_text_surface);
-            SDL_Rect plane_text_rect;
-            plane_text_rect.x = 0;
-            plane_text_rect.y = 75;
-            plane_text_rect.w = 24 * plane_text_len;
-            plane_text_rect.h = 25;
-            SDL_RenderCopy(renderer, plane_text_texture, NULL, &plane_text_rect);
-            SDL_DestroyTexture(plane_text_texture);
+            char buffer[256];
+            sprintf_s(buffer, sizeof(buffer), "Plane: (%f, %f)", player.plane_x, player.plane_y);
+            SDL_Surface *text_surface = TTF_RenderText_Solid(font, buffer, (SDL_Color){255, 255, 255, 255});
+            SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
+            SDL_FreeSurface(text_surface);
+            SDL_Rect text_rect;
+            text_rect.x = 0;
+            text_rect.y = 75;
+            text_rect.w = 24 * strlen(buffer);
+            text_rect.h = 25;
+            SDL_RenderCopy(renderer, text_texture, NULL, &text_rect);
+            SDL_DestroyTexture(text_texture);
         }
 
         SDL_RenderPresent(renderer);
@@ -1073,107 +1163,6 @@ void comb_sort(int *order, double *dist, int amount)
                 order[j] = temp_order;
 
                 swapped = true;
-            }
-        }
-    }
-}
-
-void sprite_draw(double pos_x, double pos_y, int sprite_index)
-{
-    // translate object position to relative to camera
-    double object_x = pos_x - player.pos_x;
-    double object_y = pos_y - player.pos_y;
-
-    // transform object with the inverse camera matrix
-    // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
-    // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
-    // [ planeY   dirY ]                                          [ -planeY  planeX ]
-    // required for correct matrix multiplication
-    double inv_det = 1 / (player.plane_x * player.dir_y - player.dir_x * player.plane_y);
-
-    // transform_y is actually the depth inside the screen, that what Z is in 3D
-    double transform_x = inv_det * (player.dir_y * object_x - player.dir_x * object_y);
-    double transform_y = inv_det * (-player.plane_y * object_x + player.plane_x * object_y);
-
-    // where the object is on the screen
-    int object_screen_x = (int)((SCREEN_WIDTH / 2) * (1 + transform_x / transform_y));
-
-    // calculate width and height of the object on screen
-    // using transform_y instead of the real distance prevents fisheye
-    int object_width = abs((int)(SCREEN_HEIGHT / transform_y * SPRITE_SCALE_X));
-    int object_height = abs((int)(SCREEN_HEIGHT / transform_y * SPRITE_SCALE_Y));
-
-    // calculate the vertical stripes to draw the object
-    int draw_start_x = -object_width / 2 + object_screen_x;
-    if (draw_start_x < 0)
-    {
-        draw_start_x = 0;
-    }
-    int draw_end_x = object_width / 2 + object_screen_x;
-    if (draw_end_x >= SCREEN_WIDTH)
-    {
-        draw_end_x = SCREEN_WIDTH - 1;
-    }
-
-    // move the object on the screen
-    int translate_y = (int)(SPRITE_TRANSLATE_Y / transform_y);
-
-    // calculate lowest and highest pixel to fill in current stripe
-    int draw_start_y = -object_height / 2 + SCREEN_HEIGHT / 2 + translate_y;
-    if (draw_start_y < 0)
-    {
-        draw_start_y = 0;
-    }
-    int draw_end_y = object_height / 2 + SCREEN_HEIGHT / 2 + translate_y;
-    if (draw_end_y >= SCREEN_HEIGHT)
-    {
-        draw_end_y = SCREEN_HEIGHT - 1;
-    }
-
-    // calculate angle of object to player
-    // double angle = atan2(object_y, object_x);
-
-    // choose the sprite
-    IMG_Image *sprite = sprites[sprite_index];
-
-    // loop through every vertical stripe of the sprite on screen
-    for (int x = draw_start_x; x < draw_end_x; x++)
-    {
-        // x coordinate on the sprite
-        int sprite_x = (256 * (x - (-object_width / 2 + object_screen_x)) * sprite->w / object_width) / 256;
-
-        // the conditions in the if are:
-        // 1) it's in front of camera plane so you don't see things behind you
-        // 2) it's on the screen (left)
-        // 3) it's on the screen (right)
-        if (transform_y > 0 && x > 0 && x < SCREEN_WIDTH)
-        {
-            for (int y = draw_start_y; y < draw_end_y; y++)
-            {
-                // depth_buffer, with perpendicular distance
-                if (transform_y < depth_buffer[x + y * SCREEN_WIDTH])
-                {
-                    // y coordinate on the sprite
-                    int sprite_y = ((((y - translate_y) * 256 - SCREEN_HEIGHT * 128 + object_height * 128) * sprite->h) / object_height) / 256;
-
-                    // get current color on the sprite
-                    unsigned int color = sprite->pixels[sprite_x + sprite_y * sprite->w];
-
-                    if (foggy)
-                    {
-                        color = color_fog(color, transform_y);
-                    }
-
-                    // draw the pixel if it isnt't black, black is the invisible color
-                    if ((color & 0x00ffffff) != 0)
-                    {
-                        // used for translucency
-                        // unsigned int previous_color = pixel_buffer[x + y * w];
-
-                        pixel_buffer[x + y * SCREEN_WIDTH] = color;
-                        depth_buffer[x + y * SCREEN_WIDTH] = transform_y;
-                    }
-                }
             }
         }
     }
