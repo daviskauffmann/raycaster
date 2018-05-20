@@ -76,17 +76,11 @@ struct player
     double plane_y;
 };
 
-SDL_Window *window = NULL;
-SDL_Renderer *renderer = NULL;
-SDL_Texture *screen = NULL;
-
-IMG_Image *textures[NUM_TEXTURES];
-IMG_Image *sprites[NUM_SPRITES];
-
-Mix_Music *tracks[NUM_TRACKS];
-Mix_Chunk *sounds[NUM_SOUNDS];
-
-TTF_Font *font = NULL;
+void player_move(struct player *player, double dx, double dy);
+void player_rotate(struct player *player, double angle);
+void comb_sort(int *order, double *dist, int amount);
+unsigned int color_darken(unsigned int color);
+unsigned int color_fog(unsigned int color, double distance);
 
 unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT] = {
     {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
@@ -188,31 +182,13 @@ struct object objects[NUM_OBJECTS] = {
     {10.5, 15.8, 0, 1.0, 1.0, 0.0},
 };
 
-struct player player;
-
-bool fps_cap = true;
-bool textured = true;
-bool draw_walls = true;
-bool draw_floor = true;
-bool draw_objects = true;
-bool shading = true;
-bool foggy = true;
-
-unsigned int pixel_buffer[WINDOW_WIDTH * WINDOW_HEIGHT];
-double depth_buffer[WINDOW_WIDTH * WINDOW_HEIGHT];
-
-void player_move(double dx, double dy);
-void player_rotate(double angle);
-void comb_sort(int *order, double *dist, int amount);
-unsigned int color_darken(unsigned int color);
-unsigned int color_fog(unsigned int color, double distance);
-
 int main(int argc, char *args[])
 {
     // suppress warning C4100
     (void)argc;
     (void)args;
 
+    // init SDL
     if (SDL_Init(SDL_FLAGS) != 0)
     {
         SDL_Log("SDL_Init: %s", SDL_GetError());
@@ -222,7 +198,8 @@ int main(int argc, char *args[])
 
     SDL_SetRelativeMouseMode(SDL_TRUE);
 
-    window = SDL_CreateWindow(
+    // create window
+    SDL_Window *window = SDL_CreateWindow(
         WINDOW_TITLE,
         WINDOW_X,
         WINDOW_Y,
@@ -237,7 +214,8 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    renderer = SDL_CreateRenderer(
+    // create renderer
+    SDL_Renderer *renderer = SDL_CreateRenderer(
         window,
         RENDERER_INDEX,
         RENDERER_FLAGS);
@@ -249,7 +227,8 @@ int main(int argc, char *args[])
         return 1;
     }
 
-    screen = SDL_CreateTexture(
+    // create screen texture
+    SDL_Texture *screen = SDL_CreateTexture(
         renderer,
         SCREEN_FORMAT,
         SCREEN_ACCESS,
@@ -263,6 +242,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
+    // init SDL_image
     if ((IMG_Init(IMG_FLAGS) & IMG_FLAGS) != IMG_FLAGS)
     {
         SDL_Log("IMG_Init: %s", IMG_GetError());
@@ -270,6 +250,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
+    // init SDL_mixer
     if ((Mix_Init(MIX_FLAGS) & MIX_FLAGS) != MIX_FLAGS)
     {
         SDL_Log("Mix_Init: %s", Mix_GetError());
@@ -277,6 +258,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
+    // setup audio
     if (Mix_OpenAudio(AUDIO_FREQUENCY, AUDIO_FORMAT, AUDIO_CHANNELS, AUDIO_CHUNK_SIZE) != 0)
     {
         SDL_Log("Mix_OpenAudio: %s", Mix_GetError());
@@ -284,6 +266,7 @@ int main(int argc, char *args[])
         return 1;
     }
 
+    // init SDL_ttf
     if (TTF_Init() != 0)
     {
         SDL_Log("TTF_Init: %s", TTF_GetError());
@@ -291,6 +274,8 @@ int main(int argc, char *args[])
         return 1;
     }
 
+    // load textures
+    IMG_Image *textures[NUM_TEXTURES];
     textures[0] = IMG_LoadAndConvert("assets/images/eagle.png");
     textures[1] = IMG_LoadAndConvert("assets/images/redbrick.png");
     textures[2] = IMG_LoadAndConvert("assets/images/purplestone.png");
@@ -299,24 +284,50 @@ int main(int argc, char *args[])
     textures[5] = IMG_LoadAndConvert("assets/images/mossy.png");
     textures[6] = IMG_LoadAndConvert("assets/images/wood.png");
     textures[7] = IMG_LoadAndConvert("assets/images/colorstone.png");
+
+    // load sprites
+    IMG_Image *sprites[NUM_SPRITES];
     sprites[0] = IMG_LoadAndConvert("assets/images/barrel.png");
     sprites[1] = IMG_LoadAndConvert("assets/images/pillar.png");
     sprites[2] = IMG_LoadAndConvert("assets/images/greenlight.png");
 
+    // load music
+    Mix_Music *tracks[NUM_TRACKS];
     tracks[0] = Mix_LoadMUS("assets/audio/background.mp3");
+
+    // load sounds
+    Mix_Chunk *sounds[NUM_SOUNDS];
     sounds[0] = Mix_LoadWAV("assets/audio/shoot.wav");
 
-    font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
+    // load font
+    TTF_Font *font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
 
-    player.pos_x = 22.0;
-    player.pos_y = 11.5;
-    player.dir_x = -1.0;
-    player.dir_y = 0.0;
-    player.plane_x = 0.0;
-    player.plane_y = 1.0;
+    // game settings
+    bool fps_cap = true;
+    bool textured = true;
+    bool draw_walls = true;
+    bool draw_floor = true;
+    bool draw_objects = true;
+    bool shading = true;
+    bool foggy = true;
 
-    SDL_Log("FOV: %f", 2 * atan(player.plane_y) / M_PI * 180.0);
+    // init player
+    struct player *player = malloc(sizeof(struct player));
 
+    player->pos_x = 22.0;
+    player->pos_y = 11.5;
+    player->dir_x = -1.0;
+    player->dir_y = 0.0;
+    player->plane_x = 0.0;
+    player->plane_y = 1.0;
+
+    SDL_Log("FOV: %f", 2 * atan(player->plane_y) / M_PI * 180.0);
+
+    // render buffers
+    unsigned int *pixel_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(unsigned int));
+    double *depth_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(double));
+
+    // main loop
     bool quit = false;
     unsigned int current_time = 0;
     while (!quit)
@@ -357,7 +368,7 @@ int main(int argc, char *args[])
                 // calculate rotation angle
                 double angle = -mouse_dx / 1000.0 * MOUSE_SENSITIVITY;
 
-                player_rotate(angle);
+                player_rotate(player, angle);
             }
             break;
             case SDL_KEYDOWN:
@@ -490,37 +501,37 @@ int main(int argc, char *args[])
         // move forward
         if (keys[SDL_SCANCODE_W])
         {
-            double dx = player.dir_x * move_speed;
-            double dy = player.dir_y * move_speed;
+            double dx = player->dir_x * move_speed;
+            double dy = player->dir_y * move_speed;
 
-            player_move(dx, dy);
+            player_move(player, dx, dy);
         }
 
         // strafe left
         if (keys[SDL_SCANCODE_A])
         {
-            double dx = -player.dir_y * move_speed;
-            double dy = player.dir_x * move_speed;
+            double dx = -player->dir_y * move_speed;
+            double dy = player->dir_x * move_speed;
 
-            player_move(dx, dy);
+            player_move(player, dx, dy);
         }
 
         // move backward
         if (keys[SDL_SCANCODE_S])
         {
-            double dx = -player.dir_x * move_speed;
-            double dy = -player.dir_y * move_speed;
+            double dx = -player->dir_x * move_speed;
+            double dy = -player->dir_y * move_speed;
 
-            player_move(dx, dy);
+            player_move(player, dx, dy);
         }
 
         // strafe right
         if (keys[SDL_SCANCODE_D])
         {
-            double dx = player.dir_y * move_speed;
-            double dy = -player.dir_x * move_speed;
+            double dx = player->dir_y * move_speed;
+            double dy = -player->dir_x * move_speed;
 
-            player_move(dx, dy);
+            player_move(player, dx, dy);
         }
 
         // calculate rotation angle
@@ -529,12 +540,12 @@ int main(int argc, char *args[])
 
         if (keys[SDL_SCANCODE_Q])
         {
-            player_rotate(angle);
+            player_rotate(player, angle);
         }
 
         if (keys[SDL_SCANCODE_E])
         {
-            player_rotate(-angle);
+            player_rotate(player, -angle);
         }
 
         // shooting
@@ -564,12 +575,12 @@ int main(int argc, char *args[])
             double camera_x = (2.0 * x / WINDOW_WIDTH) - 1;
 
             // calculate ray position and direction
-            double ray_dir_x = (camera_x * player.plane_x) + player.dir_x;
-            double ray_dir_y = (camera_x * player.plane_y) + player.dir_y;
+            double ray_dir_x = (camera_x * player->plane_x) + player->dir_x;
+            double ray_dir_y = (camera_x * player->plane_y) + player->dir_y;
 
             // which box of the map we're in
-            int map_x = (int)player.pos_x;
-            int map_y = (int)player.pos_y;
+            int map_x = (int)player->pos_x;
+            int map_y = (int)player->pos_y;
 
             // length of ray from current position to next x or y-side
             double side_dist_x;
@@ -586,22 +597,22 @@ int main(int argc, char *args[])
             // calculate step and initial sideDist
             if (ray_dir_x < 0)
             {
-                side_dist_x = (player.pos_x - map_x) * delta_dist_x;
+                side_dist_x = (player->pos_x - map_x) * delta_dist_x;
                 step_x = -1;
             }
             else
             {
-                side_dist_x = (map_x + 1 - player.pos_x) * delta_dist_x;
+                side_dist_x = (map_x + 1 - player->pos_x) * delta_dist_x;
                 step_x = 1;
             }
             if (ray_dir_y < 0)
             {
-                side_dist_y = (player.pos_y - map_y) * delta_dist_y;
+                side_dist_y = (player->pos_y - map_y) * delta_dist_y;
                 step_y = -1;
             }
             else
             {
-                side_dist_y = (map_y + 1 - player.pos_y) * delta_dist_y;
+                side_dist_y = (map_y + 1 - player->pos_y) * delta_dist_y;
                 step_y = 1;
             }
 
@@ -635,8 +646,8 @@ int main(int argc, char *args[])
             // calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
             double perp_wall_dist =
                 side == 0
-                    ? (map_x - player.pos_x + (1 - step_x) / 2) / ray_dir_x
-                    : (map_y - player.pos_y + (1 - step_y) / 2) / ray_dir_y;
+                    ? (map_x - player->pos_x + (1 - step_x) / 2) / ray_dir_x
+                    : (map_y - player->pos_y + (1 - step_y) / 2) / ray_dir_y;
 
             // calculate height of line to draw on screen
             int line_height = (int)(WINDOW_HEIGHT / perp_wall_dist);
@@ -659,11 +670,11 @@ int main(int argc, char *args[])
                 double wall_x;
                 if (side == 0)
                 {
-                    wall_x = player.pos_y + perp_wall_dist * ray_dir_y;
+                    wall_x = player->pos_y + perp_wall_dist * ray_dir_y;
                 }
                 else
                 {
-                    wall_x = player.pos_x + perp_wall_dist * ray_dir_x;
+                    wall_x = player->pos_x + perp_wall_dist * ray_dir_x;
                 }
                 wall_x -= floor(wall_x);
 
@@ -749,8 +760,8 @@ int main(int argc, char *args[])
                         double current_dist = WINDOW_HEIGHT / (2.0 * y - WINDOW_HEIGHT);
                         double weight = current_dist / perp_wall_dist;
 
-                        double current_x = weight * floor_x_wall + (1 - weight) * player.pos_x;
-                        double current_y = weight * floor_y_wall + (1 - weight) * player.pos_y;
+                        double current_x = weight * floor_x_wall + (1 - weight) * player->pos_x;
+                        double current_y = weight * floor_y_wall + (1 - weight) * player->pos_y;
 
                         // floor
                         {
@@ -893,7 +904,7 @@ int main(int argc, char *args[])
             for (int i = 0; i < NUM_OBJECTS; i++)
             {
                 object_order[i] = i;
-                object_dist[i] = pow(player.pos_x - objects[i].x, 2) + pow(player.pos_y - objects[i].y, 2);
+                object_dist[i] = pow(player->pos_x - objects[i].x, 2) + pow(player->pos_y - objects[i].y, 2);
             }
             comb_sort(object_order, object_dist, NUM_OBJECTS);
 
@@ -903,19 +914,19 @@ int main(int argc, char *args[])
                 struct object object = objects[object_order[i]];
 
                 // translate object position to relative to camera
-                double object_x = object.x - player.pos_x;
-                double object_y = object.y - player.pos_y;
+                double object_x = object.x - player->pos_x;
+                double object_y = object.y - player->pos_y;
 
                 // transform object with the inverse camera matrix
                 // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
                 // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
                 // [ planeY   dirY ]                                          [ -planeY  planeX ]
                 // required for correct matrix multiplication
-                double inv_det = 1 / (player.plane_x * player.dir_y - player.dir_x * player.plane_y);
+                double inv_det = 1 / (player->plane_x * player->dir_y - player->dir_x * player->plane_y);
 
                 // transform_y is actually the depth inside the screen, that what Z is in 3D
-                double transform_x = inv_det * (player.dir_y * object_x - player.dir_x * object_y);
-                double transform_y = inv_det * (-player.plane_y * object_x + player.plane_x * object_y);
+                double transform_x = inv_det * (player->dir_y * object_x - player->dir_x * object_y);
+                double transform_y = inv_det * (-player->plane_y * object_x + player->plane_x * object_y);
 
                 // where the object is on the screen
                 int object_screen_x = (int)((WINDOW_WIDTH / 2) * (1 + transform_x / transform_y));
@@ -1031,7 +1042,7 @@ int main(int argc, char *args[])
         // display position
         {
             char buffer[256];
-            sprintf_s(buffer, sizeof(buffer), "Pos: (%f, %f)", player.pos_x, player.pos_y);
+            sprintf_s(buffer, sizeof(buffer), "Pos: (%f, %f)", player->pos_x, player->pos_y);
             SDL_Surface *text_surface = TTF_RenderText_Solid(font, buffer, (SDL_Color){255, 255, 255, 255});
             SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
             SDL_FreeSurface(text_surface);
@@ -1047,7 +1058,7 @@ int main(int argc, char *args[])
         // display direction
         {
             char buffer[256];
-            sprintf_s(buffer, sizeof(buffer), "Dir: (%f, %f)", player.dir_x, player.dir_y);
+            sprintf_s(buffer, sizeof(buffer), "Dir: (%f, %f)", player->dir_x, player->dir_y);
             SDL_Surface *text_surface = TTF_RenderText_Solid(font, buffer, (SDL_Color){255, 255, 255, 255});
             SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
             SDL_FreeSurface(text_surface);
@@ -1063,7 +1074,7 @@ int main(int argc, char *args[])
         // display camera plane
         {
             char buffer[256];
-            sprintf_s(buffer, sizeof(buffer), "Plane: (%f, %f)", player.plane_x, player.plane_y);
+            sprintf_s(buffer, sizeof(buffer), "Plane: (%f, %f)", player->plane_x, player->plane_y);
             SDL_Surface *text_surface = TTF_RenderText_Solid(font, buffer, (SDL_Color){255, 255, 255, 255});
             SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
             SDL_FreeSurface(text_surface);
@@ -1087,6 +1098,11 @@ int main(int argc, char *args[])
             SDL_Delay(FRAME_DELAY - frame_time);
         }
     }
+
+    free(depth_buffer);
+    free(pixel_buffer);
+
+    free(player);
 
     TTF_CloseFont(font);
     TTF_Quit();
@@ -1121,31 +1137,31 @@ int main(int argc, char *args[])
     return 0;
 }
 
-void player_move(double dx, double dy)
+void player_move(struct player *player, double dx, double dy)
 {
-    if (wall_map[(int)(player.pos_x + dx)][(int)(player.pos_y)] == 0)
+    if (wall_map[(int)(player->pos_x + dx)][(int)(player->pos_y)] == 0)
     {
-        player.pos_x += dx;
+        player->pos_x += dx;
     }
-    if (wall_map[(int)(player.pos_x)][(int)(player.pos_y + dy)] == 0)
+    if (wall_map[(int)(player->pos_x)][(int)(player->pos_y + dy)] == 0)
     {
-        player.pos_y += dy;
+        player->pos_y += dy;
     }
 }
 
-void player_rotate(double angle)
+void player_rotate(struct player *player, double angle)
 {
     double rot_x = cos(angle);
     double rot_y = sin(angle);
 
     // both camera direction and camera plane must be rotated
-    double old_dir_x = player.dir_x;
-    player.dir_x = player.dir_x * rot_x - player.dir_y * rot_y;
-    player.dir_y = old_dir_x * rot_y + player.dir_y * rot_x;
+    double old_dir_x = player->dir_x;
+    player->dir_x = player->dir_x * rot_x - player->dir_y * rot_y;
+    player->dir_y = old_dir_x * rot_y + player->dir_y * rot_x;
 
-    double old_plane_x = player.plane_x;
-    player.plane_x = player.plane_x * rot_x - player.plane_y * rot_y;
-    player.plane_y = old_plane_x * rot_y + player.plane_y * rot_x;
+    double old_plane_x = player->plane_x;
+    player->plane_x = player->plane_x * rot_x - player->plane_y * rot_y;
+    player->plane_y = old_plane_x * rot_y + player->plane_y * rot_x;
 }
 
 void comb_sort(int *order, double *dist, int amount)
