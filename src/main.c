@@ -43,44 +43,44 @@
 #define MAP_HEIGHT 24
 #define NUM_OBJECTS 19
 
-#define MOVE_SPEED 5.0
-#define SPRINT_MULT 2.0
-#define ROTATE_SENSITIVITY 3.0
-#define MOUSE_SENSITIVITY 2.0
+#define MOVE_SPEED 5.0f
+#define SPRINT_MULT 2.0f
+#define ROTATE_SENSITIVITY 3.0f
+#define MOUSE_SENSITIVITY 2.0f
 
 #define FLOOR_TEXTURE_MULT 1
 #define CEILING_TEXTURE_MULT 1
 
-#define FOG_STRENGTH 0.5
+#define FOG_STRENGTH 0.5f
 
 #define FPS_CAP 60
 #define FRAME_DELAY (1000 / FPS_CAP)
 
 struct object
 {
-    double x;
-    double y;
+    float x;
+    float y;
     unsigned char sprite_index;
-    double sprite_scale_x;
-    double sprite_scale_y;
-    double sprite_translate_y;
+    float sprite_scale_x;
+    float sprite_scale_y;
+    float sprite_translate_y;
 };
 
 struct player
 {
-    double pos_x;
-    double pos_y;
-    double dir_x;
-    double dir_y;
-    double plane_x;
-    double plane_y;
+    float pos_x;
+    float pos_y;
+    float dir_x;
+    float dir_y;
+    float plane_x;
+    float plane_y;
 };
 
-void player_move(struct player *player, double dx, double dy);
-void player_rotate(struct player *player, double angle);
-void comb_sort(int *order, double *dist, int amount);
+void player_move(struct player *player, float dx, float dy);
+void player_rotate(struct player *player, float angle);
+void comb_sort(int *order, float *dist, int amount);
 unsigned int color_darken(unsigned int color);
-unsigned int color_fog(unsigned int color, double distance);
+unsigned int color_fog(unsigned int color, float distance);
 
 unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT] = {
     {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
@@ -161,25 +161,25 @@ unsigned char ceiling_map[MAP_WIDTH][MAP_HEIGHT] = {
     {6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6}};
 
 struct object objects[NUM_OBJECTS] = {
-    {20.5, 11.5, 2, 1.0, 1.0, 0.0},
-    {18.5, 4.50, 2, 1.0, 1.0, 0.0},
-    {10.0, 4.50, 2, 1.0, 1.0, 0.0},
-    {10.0, 12.5, 2, 1.0, 1.0, 0.0},
-    {3.50, 6.50, 2, 1.0, 1.0, 0.0},
-    {3.50, 20.5, 2, 1.0, 1.0, 0.0},
-    {3.50, 14.5, 2, 1.0, 1.0, 0.0},
-    {14.5, 20.5, 2, 1.0, 1.0, 0.0},
-    {18.5, 10.5, 1, 1.0, 1.0, 0.0},
-    {18.5, 11.5, 1, 1.0, 1.0, 0.0},
-    {18.5, 12.5, 1, 1.0, 1.0, 0.0},
-    {21.5, 1.50, 0, 1.0, 1.0, 0.0},
-    {15.5, 1.50, 0, 1.0, 1.0, 0.0},
-    {16.0, 1.80, 0, 1.0, 1.0, 0.0},
-    {16.2, 1.20, 0, 1.0, 1.0, 0.0},
-    {3.50, 2.50, 0, 1.0, 1.0, 0.0},
-    {9.50, 15.5, 0, 1.0, 1.0, 0.0},
-    {10.0, 15.1, 0, 1.0, 1.0, 0.0},
-    {10.5, 15.8, 0, 1.0, 1.0, 0.0},
+    {20.5f, 11.5f, 2, 1.0f, 1.0f, 0.0f},
+    {18.5f, 4.50f, 2, 1.0f, 1.0f, 0.0f},
+    {10.0f, 4.50f, 2, 1.0f, 1.0f, 0.0f},
+    {10.0f, 12.5f, 2, 1.0f, 1.0f, 0.0f},
+    {3.50f, 6.50f, 2, 1.0f, 1.0f, 0.0f},
+    {3.50f, 20.5f, 2, 1.0f, 1.0f, 0.0f},
+    {3.50f, 14.5f, 2, 1.0f, 1.0f, 0.0f},
+    {14.5f, 20.5f, 2, 1.0f, 1.0f, 0.0f},
+    {18.5f, 10.5f, 1, 1.0f, 1.0f, 0.0f},
+    {18.5f, 11.5f, 1, 1.0f, 1.0f, 0.0f},
+    {18.5f, 12.5f, 1, 1.0f, 1.0f, 0.0f},
+    {21.5f, 1.50f, 0, 1.0f, 1.0f, 0.0f},
+    {15.5f, 1.50f, 0, 1.0f, 1.0f, 0.0f},
+    {16.0f, 1.80f, 0, 1.0f, 1.0f, 0.0f},
+    {16.2f, 1.20f, 0, 1.0f, 1.0f, 0.0f},
+    {3.50f, 2.50f, 0, 1.0f, 1.0f, 0.0f},
+    {9.50f, 15.5f, 0, 1.0f, 1.0f, 0.0f},
+    {10.0f, 15.1f, 0, 1.0f, 1.0f, 0.0f},
+    {10.5f, 15.8f, 0, 1.0f, 1.0f, 0.0f},
 };
 
 int main(int argc, char *args[])
@@ -314,18 +314,18 @@ int main(int argc, char *args[])
     // init player
     struct player *player = malloc(sizeof(struct player));
 
-    player->pos_x = 22.0;
-    player->pos_y = 11.5;
-    player->dir_x = -1.0;
-    player->dir_y = 0.0;
-    player->plane_x = 0.0;
-    player->plane_y = 1.0;
+    player->pos_x = 22.0f;
+    player->pos_y = 11.5f;
+    player->dir_x = -1.0f;
+    player->dir_y = 0.0f;
+    player->plane_x = 0.0f;
+    player->plane_y = 1.0f;
 
-    SDL_Log("FOV: %f", 2 * atan(player->plane_y) / M_PI * 180.0);
+    SDL_Log("FOV: %f", 2 * atanf(player->plane_y) / M_PI * 180.0f);
 
     // render buffers
     unsigned int *pixel_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(unsigned int));
-    double *depth_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(double));
+    float *depth_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(float));
 
     // main loop
     bool quit = false;
@@ -338,15 +338,15 @@ int main(int argc, char *args[])
         // calculate time passed since last frame
         unsigned int previous_time = current_time;
         current_time = SDL_GetTicks();
-        double delta_time = (current_time - previous_time) / 1000.0;
+        float delta_time = (current_time - previous_time) / 1000.0f;
 
         // calculate fps
-        static double fps_update_timer = 0.0;
+        static float fps_update_timer = 0.0f;
         static int fps = 0;
         fps_update_timer += delta_time;
-        if (fps_update_timer >= 0.25)
+        if (fps_update_timer >= 0.25f)
         {
-            fps_update_timer = 0.0;
+            fps_update_timer = 0.0f;
             fps = (int)(1 / delta_time);
         }
 
@@ -366,7 +366,7 @@ int main(int argc, char *args[])
                 // int mouse_dy = event.motion.yrel;
 
                 // calculate rotation angle
-                double angle = -mouse_dx / 1000.0 * MOUSE_SENSITIVITY;
+                float angle = -mouse_dx / 1000.0f * MOUSE_SENSITIVITY;
 
                 player_rotate(player, angle);
             }
@@ -480,7 +480,7 @@ int main(int argc, char *args[])
 
         // calculate base movement speed
         // the constant value is in squares/second
-        double move_speed = MOVE_SPEED * delta_time;
+        float move_speed = MOVE_SPEED * delta_time;
 
         // sprinting
         if (keys[SDL_SCANCODE_LSHIFT])
@@ -495,14 +495,14 @@ int main(int argc, char *args[])
             (keys[SDL_SCANCODE_S] && keys[SDL_SCANCODE_A]))
         {
             // precomputed 1 / sqrt(2)
-            move_speed *= 0.71;
+            move_speed *= 0.71f;
         }
 
         // move forward
         if (keys[SDL_SCANCODE_W])
         {
-            double dx = player->dir_x * move_speed;
-            double dy = player->dir_y * move_speed;
+            float dx = player->dir_x * move_speed;
+            float dy = player->dir_y * move_speed;
 
             player_move(player, dx, dy);
         }
@@ -510,8 +510,8 @@ int main(int argc, char *args[])
         // strafe left
         if (keys[SDL_SCANCODE_A])
         {
-            double dx = -player->dir_y * move_speed;
-            double dy = player->dir_x * move_speed;
+            float dx = -player->dir_y * move_speed;
+            float dy = player->dir_x * move_speed;
 
             player_move(player, dx, dy);
         }
@@ -519,8 +519,8 @@ int main(int argc, char *args[])
         // move backward
         if (keys[SDL_SCANCODE_S])
         {
-            double dx = -player->dir_x * move_speed;
-            double dy = -player->dir_y * move_speed;
+            float dx = -player->dir_x * move_speed;
+            float dy = -player->dir_y * move_speed;
 
             player_move(player, dx, dy);
         }
@@ -528,15 +528,15 @@ int main(int argc, char *args[])
         // strafe right
         if (keys[SDL_SCANCODE_D])
         {
-            double dx = player->dir_y * move_speed;
-            double dy = -player->dir_x * move_speed;
+            float dx = player->dir_y * move_speed;
+            float dy = -player->dir_x * move_speed;
 
             player_move(player, dx, dy);
         }
 
         // calculate rotation angle
         // the constant value is in radians/second
-        double angle = ROTATE_SENSITIVITY * delta_time;
+        float angle = ROTATE_SENSITIVITY * delta_time;
 
         if (keys[SDL_SCANCODE_Q])
         {
@@ -549,13 +549,13 @@ int main(int argc, char *args[])
         }
 
         // shooting
-        static double shoot_timer = 0.0;
+        static float shoot_timer = 0.0f;
         shoot_timer += delta_time;
         if (mouse & SDL_BUTTON(SDL_BUTTON_LEFT))
         {
-            if (shoot_timer >= 0.25)
+            if (shoot_timer >= 0.25f)
             {
-                shoot_timer = 0.0;
+                shoot_timer = 0.0f;
 
                 Mix_PlayChannel(-1, sounds[0], 0);
             }
@@ -568,27 +568,27 @@ int main(int argc, char *args[])
             for (int y = 0; y < WINDOW_HEIGHT; y++)
             {
                 pixel_buffer[x + y * WINDOW_WIDTH] = 0;
-                depth_buffer[x + y * WINDOW_WIDTH] = DBL_MAX;
+                depth_buffer[x + y * WINDOW_WIDTH] = FLT_MAX;
             }
 
             // calculate x-coordinate in camera space
-            double camera_x = (2.0 * x / WINDOW_WIDTH) - 1;
+            float camera_x = (2.0f * x / WINDOW_WIDTH) - 1;
 
             // calculate ray position and direction
-            double ray_dir_x = (camera_x * player->plane_x) + player->dir_x;
-            double ray_dir_y = (camera_x * player->plane_y) + player->dir_y;
+            float ray_dir_x = (camera_x * player->plane_x) + player->dir_x;
+            float ray_dir_y = (camera_x * player->plane_y) + player->dir_y;
 
             // which box of the map we're in
             int map_x = (int)player->pos_x;
             int map_y = (int)player->pos_y;
 
             // length of ray from current position to next x or y-side
-            double side_dist_x;
-            double side_dist_y;
+            float side_dist_x;
+            float side_dist_y;
 
             // length of ray from one x or y-side to next x or y-side
-            double delta_dist_x = fabs(1 / ray_dir_x);
-            double delta_dist_y = fabs(1 / ray_dir_y);
+            float delta_dist_x = fabsf(1 / ray_dir_x);
+            float delta_dist_y = fabsf(1 / ray_dir_y);
 
             // what direction to step in x or y-direction (either +1 or -1)
             int step_x;
@@ -644,7 +644,7 @@ int main(int argc, char *args[])
             }
 
             // calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
-            double perp_wall_dist =
+            float perp_wall_dist =
                 side == 0
                     ? (map_x - player->pos_x + (1 - step_x) / 2) / ray_dir_x
                     : (map_y - player->pos_y + (1 - step_y) / 2) / ray_dir_y;
@@ -667,7 +667,7 @@ int main(int argc, char *args[])
             if (textured)
             {
                 // calculate where exactly the wall was hit
-                double wall_x;
+                float wall_x;
                 if (side == 0)
                 {
                     wall_x = player->pos_y + perp_wall_dist * ray_dir_y;
@@ -676,7 +676,7 @@ int main(int argc, char *args[])
                 {
                     wall_x = player->pos_x + perp_wall_dist * ray_dir_x;
                 }
-                wall_x -= floor(wall_x);
+                wall_x -= floorf(wall_x);
 
                 if (draw_walls)
                 {
@@ -723,29 +723,29 @@ int main(int argc, char *args[])
                 if (draw_floor)
                 {
                     // x, y position of the floor texel at the bottom of the wall
-                    double floor_x_wall;
-                    double floor_y_wall;
+                    float floor_x_wall;
+                    float floor_y_wall;
 
                     // 4 different wall directions possible
                     if (side == 0 && ray_dir_x > 0)
                     {
-                        floor_x_wall = (double)map_x;
+                        floor_x_wall = (float)map_x;
                         floor_y_wall = map_y + wall_x;
                     }
                     else if (side == 0 && ray_dir_x < 0)
                     {
-                        floor_x_wall = (double)(map_x + 1);
+                        floor_x_wall = (float)(map_x + 1);
                         floor_y_wall = map_y + wall_x;
                     }
                     else if (side == 1 && ray_dir_y > 0)
                     {
                         floor_x_wall = map_x + wall_x;
-                        floor_y_wall = (double)map_y;
+                        floor_y_wall = (float)map_y;
                     }
                     else // if (side == 1 && ray_dir_y < 0)
                     {
                         floor_x_wall = map_x + wall_x;
-                        floor_y_wall = (double)(map_y + 1);
+                        floor_y_wall = (float)(map_y + 1);
                     }
 
                     // becomes < 0 when the integer overflows
@@ -757,11 +757,11 @@ int main(int argc, char *args[])
                     // draw the floor from draw_end to the bottom of the screen
                     for (int y = draw_end + 1; y < WINDOW_HEIGHT; y++)
                     {
-                        double current_dist = WINDOW_HEIGHT / (2.0 * y - WINDOW_HEIGHT);
-                        double weight = current_dist / perp_wall_dist;
+                        float current_dist = WINDOW_HEIGHT / (2.0f * y - WINDOW_HEIGHT);
+                        float weight = current_dist / perp_wall_dist;
 
-                        double current_x = weight * floor_x_wall + (1 - weight) * player->pos_x;
-                        double current_y = weight * floor_y_wall + (1 - weight) * player->pos_y;
+                        float current_x = weight * floor_x_wall + (1 - weight) * player->pos_x;
+                        float current_y = weight * floor_y_wall + (1 - weight) * player->pos_y;
 
                         // floor
                         {
@@ -898,13 +898,13 @@ int main(int argc, char *args[])
         {
             // arrays used to sort the objects
             int object_order[NUM_OBJECTS];
-            double object_dist[NUM_OBJECTS];
+            float object_dist[NUM_OBJECTS];
 
             // sort objects from far to close
             for (int i = 0; i < NUM_OBJECTS; i++)
             {
                 object_order[i] = i;
-                object_dist[i] = pow(player->pos_x - objects[i].x, 2) + pow(player->pos_y - objects[i].y, 2);
+                object_dist[i] = powf(player->pos_x - objects[i].x, 2) + powf(player->pos_y - objects[i].y, 2);
             }
             comb_sort(object_order, object_dist, NUM_OBJECTS);
 
@@ -914,19 +914,19 @@ int main(int argc, char *args[])
                 struct object object = objects[object_order[i]];
 
                 // translate object position to relative to camera
-                double object_x = object.x - player->pos_x;
-                double object_y = object.y - player->pos_y;
+                float object_x = object.x - player->pos_x;
+                float object_y = object.y - player->pos_y;
 
                 // transform object with the inverse camera matrix
                 // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
                 // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
                 // [ planeY   dirY ]                                          [ -planeY  planeX ]
                 // required for correct matrix multiplication
-                double inv_det = 1 / (player->plane_x * player->dir_y - player->dir_x * player->plane_y);
+                float inv_det = 1 / (player->plane_x * player->dir_y - player->dir_x * player->plane_y);
 
                 // transform_y is actually the depth inside the screen, that what Z is in 3D
-                double transform_x = inv_det * (player->dir_y * object_x - player->dir_x * object_y);
-                double transform_y = inv_det * (-player->plane_y * object_x + player->plane_x * object_y);
+                float transform_x = inv_det * (player->dir_y * object_x - player->dir_x * object_y);
+                float transform_y = inv_det * (-player->plane_y * object_x + player->plane_x * object_y);
 
                 // where the object is on the screen
                 int object_screen_x = (int)((WINDOW_WIDTH / 2) * (1 + transform_x / transform_y));
@@ -964,7 +964,7 @@ int main(int argc, char *args[])
                 }
 
                 // calculate angle of object to player
-                // double angle = atan2(object_y, object_x);
+                // float angle = atan2(object_y, object_x);
 
                 // choose the sprite
                 IMG_Image *sprite = sprites[object.sprite_index];
@@ -1013,6 +1013,7 @@ int main(int argc, char *args[])
             }
         }
 
+        // clear the renderer
         SDL_RenderClear(renderer);
 
         // display pixel buffer
@@ -1087,13 +1088,14 @@ int main(int argc, char *args[])
             SDL_DestroyTexture(text_texture);
         }
 
+        // display the renderer
         SDL_RenderPresent(renderer);
 
         // apply fps cap
         unsigned int frame_end = SDL_GetTicks();
         unsigned int frame_time = frame_end - frame_start;
 
-        if (FRAME_DELAY > frame_time)
+        if (fps_cap && FRAME_DELAY > frame_time)
         {
             SDL_Delay(FRAME_DELAY - frame_time);
         }
@@ -1137,7 +1139,7 @@ int main(int argc, char *args[])
     return 0;
 }
 
-void player_move(struct player *player, double dx, double dy)
+void player_move(struct player *player, float dx, float dy)
 {
     if (wall_map[(int)(player->pos_x + dx)][(int)(player->pos_y)] == 0)
     {
@@ -1149,22 +1151,22 @@ void player_move(struct player *player, double dx, double dy)
     }
 }
 
-void player_rotate(struct player *player, double angle)
+void player_rotate(struct player *player, float angle)
 {
-    double rot_x = cos(angle);
-    double rot_y = sin(angle);
+    float rot_x = cosf(angle);
+    float rot_y = sinf(angle);
 
     // both camera direction and camera plane must be rotated
-    double old_dir_x = player->dir_x;
+    float old_dir_x = player->dir_x;
     player->dir_x = player->dir_x * rot_x - player->dir_y * rot_y;
     player->dir_y = old_dir_x * rot_y + player->dir_y * rot_x;
 
-    double old_plane_x = player->plane_x;
+    float old_plane_x = player->plane_x;
     player->plane_x = player->plane_x * rot_x - player->plane_y * rot_y;
     player->plane_y = old_plane_x * rot_y + player->plane_y * rot_x;
 }
 
-void comb_sort(int *order, double *dist, int amount)
+void comb_sort(int *order, float *dist, int amount)
 {
     int gap = amount;
     bool swapped = false;
@@ -1187,7 +1189,7 @@ void comb_sort(int *order, double *dist, int amount)
             int j = i + gap;
             if (dist[i] < dist[j])
             {
-                double temp_dist = dist[i];
+                float temp_dist = dist[i];
                 dist[i] = dist[j];
                 dist[j] = temp_dist;
 
@@ -1208,7 +1210,7 @@ unsigned int color_darken(unsigned int color)
 
 // TODO: optimize
 // this drops the framerate by about 20
-unsigned int color_fog(unsigned int color, double distance)
+unsigned int color_fog(unsigned int color, float distance)
 {
     // separate the colors
     int red = (color >> 16) & 0x0ff;
@@ -1216,13 +1218,13 @@ unsigned int color_fog(unsigned int color, double distance)
     int blue = color & 0x0ff;
 
     // modify the colors
-    double fog_intensity = distance * FOG_STRENGTH;
+    float fog_intensity = distance * FOG_STRENGTH;
 
     if (fog_intensity > 1)
     {
-        double redf = (double)red;
-        double greenf = (double)green;
-        double bluef = (double)blue;
+        float redf = (float)red;
+        float greenf = (float)green;
+        float bluef = (float)blue;
 
         redf /= fog_intensity;
         greenf /= fog_intensity;
