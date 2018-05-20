@@ -53,6 +53,9 @@
 
 #define FOG_STRENGTH 0.5
 
+#define FPS_CAP 60
+#define FRAME_DELAY (1000 / FPS_CAP)
+
 struct object
 {
     double x;
@@ -84,9 +87,6 @@ Mix_Music *tracks[NUM_TRACKS];
 Mix_Chunk *sounds[NUM_SOUNDS];
 
 TTF_Font *font = NULL;
-
-unsigned int previous_time = 0;
-unsigned int current_time = 0;
 
 unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT] = {
     {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
@@ -190,6 +190,7 @@ struct object objects[NUM_OBJECTS] = {
 
 struct player player;
 
+bool fps_cap = true;
 bool textured = true;
 bool draw_walls = true;
 bool draw_floor = true;
@@ -317,11 +318,14 @@ int main(int argc, char *args[])
     SDL_Log("FOV: %f", 2 * atan(player.plane_y) / M_PI * 180.0);
 
     bool quit = false;
-
+    unsigned int current_time = 0;
     while (!quit)
     {
-        // timing for input and FPS counter
-        previous_time = current_time;
+        // timer for fps cap
+        unsigned int frame_start = SDL_GetTicks();
+
+        // calculate time passed since last frame
+        unsigned int previous_time = current_time;
         current_time = SDL_GetTicks();
         double delta_time = (current_time - previous_time) / 1000.0;
 
@@ -365,30 +369,35 @@ int main(int argc, char *args[])
                 {
                 case SDLK_F1:
                 {
-                    textured = !textured;
+                    fps_cap = !fps_cap;
                 }
                 break;
                 case SDLK_F2:
                 {
-                    draw_walls = !draw_walls;
+                    textured = !textured;
                 }
                 break;
                 case SDLK_F3:
                 {
-                    draw_floor = !draw_floor;
+                    draw_walls = !draw_walls;
                 }
                 break;
                 case SDLK_F4:
                 {
-                    draw_objects = !draw_objects;
+                    draw_floor = !draw_floor;
                 }
                 break;
                 case SDLK_F5:
                 {
-                    shading = !shading;
+                    draw_objects = !draw_objects;
                 }
                 break;
                 case SDLK_F6:
+                {
+                    shading = !shading;
+                }
+                break;
+                case SDLK_F7:
                 {
                     foggy = !foggy;
                 }
@@ -1068,6 +1077,15 @@ int main(int argc, char *args[])
         }
 
         SDL_RenderPresent(renderer);
+
+        // apply fps cap
+        unsigned int frame_end = SDL_GetTicks();
+        unsigned int frame_time = frame_end - frame_start;
+
+        if (FRAME_DELAY > frame_time)
+        {
+            SDL_Delay(FRAME_DELAY - frame_time);
+        }
     }
 
     TTF_CloseFont(font);
