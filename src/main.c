@@ -321,7 +321,7 @@ int main(int argc, char *args[])
     player->plane_x = 0.0f;
     player->plane_y = 1.0f;
 
-    SDL_Log("FOV: %f", 2 * atanf(player->plane_y) / M_PI * 180.0f);
+    SDL_Log("FOV: %d", (int)(2 * atanf(player->plane_y) / M_PI * 180));
 
     // render buffers
     unsigned int *pixel_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(unsigned int));
@@ -337,17 +337,17 @@ int main(int argc, char *args[])
 
         // calculate time passed since last frame
         unsigned int previous_time = current_time;
-        current_time = SDL_GetTicks();
+        current_time = frame_start;
         float delta_time = (current_time - previous_time) / 1000.0f;
 
         // calculate fps
         static float fps_update_timer = 0.0f;
-        static int fps = 0;
+        static unsigned int fps = 0;
         fps_update_timer += delta_time;
         if (fps_update_timer >= 0.25f)
         {
             fps_update_timer = 0.0f;
-            fps = (int)(1 / delta_time);
+            fps = (unsigned int)(1 / delta_time);
         }
 
         // handle input
@@ -703,12 +703,13 @@ int main(int argc, char *args[])
                         // get the color on the texture
                         unsigned int color = texture->pixels[texture_x + texture_y * texture->w];
 
-                        // make color darker for y-sides: R, G and B byte each divided through two with a "shift" and an "and"
+                        // make color darker for y-sides
                         if (shading && side == 1)
                         {
                             color = color_darken(color);
                         }
 
+                        // apply fog
                         if (foggy)
                         {
                             color = color_fog(color, perp_wall_dist);
@@ -776,6 +777,7 @@ int main(int argc, char *args[])
                             // get the color on the texture
                             unsigned int color = texture->pixels[texture_x + texture_y * texture->w];
 
+                            // apply fog
                             if (foggy)
                             {
                                 color = color_fog(color, current_dist);
@@ -799,11 +801,13 @@ int main(int argc, char *args[])
                             // get the color on the texture
                             unsigned int color = texture->pixels[texture_x + texture_y * texture->w];
 
+                            // apply fog
                             if (foggy)
                             {
                                 color = color_fog(color, current_dist);
                             }
 
+                            // darken the ceiling
                             if (shading)
                             {
                                 color = color_darken(color);
@@ -847,12 +851,13 @@ int main(int argc, char *args[])
                         break;
                     }
 
-                    // give x and y sides different brightness
+                    // make color darker for y-sides
                     if (shading && side == 1)
                     {
                         color = color_darken(color);
                     }
 
+                    // apply fog
                     if (foggy)
                     {
                         color = color_fog(color, perp_wall_dist);
@@ -872,6 +877,7 @@ int main(int argc, char *args[])
                     unsigned int floor_color = 0xff646464;
                     unsigned int ceiling_color = floor_color;
 
+                    // darken the ceiling
                     if (shading)
                     {
                         ceiling_color = color_darken(ceiling_color);
@@ -964,7 +970,7 @@ int main(int argc, char *args[])
                 }
 
                 // calculate angle of object to player
-                // float angle = atan2(object_y, object_x);
+                // float angle = atan2f(object_y, object_x);
 
                 // choose the sprite
                 IMG_Image *sprite = sprites[object.sprite_index];
@@ -1101,6 +1107,7 @@ int main(int argc, char *args[])
         }
     }
 
+    // free resources
     free(depth_buffer);
     free(pixel_buffer);
 
@@ -1205,6 +1212,7 @@ void comb_sort(int *order, float *dist, int amount)
 
 unsigned int color_darken(unsigned int color)
 {
+    // R, G and B byte each divided through two with a "shift" and an "and"
     return (color >> 1) & 0x7f7f7f;
 }
 
