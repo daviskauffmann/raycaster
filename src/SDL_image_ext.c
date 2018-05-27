@@ -12,7 +12,7 @@ IMG_Image *IMG_LoadAndConvert(const char *file)
 
     if (!surface)
     {
-        SDL_Log("IMG_Load: %s", IMG_GetError());
+        SDL_SetError(IMG_GetError());
 
         return NULL;
     }

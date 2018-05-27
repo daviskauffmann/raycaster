@@ -191,7 +191,7 @@ int main(int argc, char *args[])
     // init SDL
     if (SDL_Init(SDL_FLAGS) != 0)
     {
-        SDL_Log("SDL_Init: %s", SDL_GetError());
+        printf("Error: %s\n", SDL_GetError());
 
         return 1;
     }
@@ -209,7 +209,7 @@ int main(int argc, char *args[])
 
     if (!window)
     {
-        SDL_Log("SDL_CreateWindow: %s", SDL_GetError());
+        printf("Error: %s\n", SDL_GetError());
 
         return 1;
     }
@@ -222,7 +222,7 @@ int main(int argc, char *args[])
 
     if (!renderer)
     {
-        SDL_Log("SDL_CreateRenderer: %s", SDL_GetError());
+        printf("Error: %s\n", SDL_GetError());
 
         return 1;
     }
@@ -237,23 +237,23 @@ int main(int argc, char *args[])
 
     if (!screen)
     {
-        SDL_Log("SDL_CreateTexture: %s", SDL_GetError());
+        printf("Error: %s\n", SDL_GetError());
 
         return 1;
     }
 
     // init SDL_image
-    if ((IMG_Init(IMG_FLAGS) & IMG_FLAGS) != IMG_FLAGS)
+    if ((IMG_Init(IMG_FLAGS) & (IMG_FLAGS)) != (IMG_FLAGS))
     {
-        SDL_Log("IMG_Init: %s", IMG_GetError());
+        printf("Error: %s\n", IMG_GetError());
 
         return 1;
     }
 
     // init SDL_mixer
-    if ((Mix_Init(MIX_FLAGS) & MIX_FLAGS) != MIX_FLAGS)
+    if ((Mix_Init(MIX_FLAGS) & (MIX_FLAGS)) != (MIX_FLAGS))
     {
-        SDL_Log("Mix_Init: %s", Mix_GetError());
+        printf("Error: %s\n", Mix_GetError());
 
         return 1;
     }
@@ -261,7 +261,7 @@ int main(int argc, char *args[])
     // setup audio
     if (Mix_OpenAudio(AUDIO_FREQUENCY, AUDIO_FORMAT, AUDIO_CHANNELS, AUDIO_CHUNK_SIZE) != 0)
     {
-        SDL_Log("Mix_OpenAudio: %s", Mix_GetError());
+        printf("Error: %s\n", Mix_GetError());
 
         return 1;
     }
@@ -269,7 +269,7 @@ int main(int argc, char *args[])
     // init SDL_ttf
     if (TTF_Init() != 0)
     {
-        SDL_Log("TTF_Init: %s", TTF_GetError());
+        printf("Error: %s\n", TTF_GetError());
 
         return 1;
     }
@@ -321,7 +321,7 @@ int main(int argc, char *args[])
     player->plane_x = 0.0f;
     player->plane_y = 1.0f;
 
-    SDL_Log("FOV: %d", (int)(2 * atanf(player->plane_y) / M_PI * 180));
+    printf("FOV: %d\n", (int)(2 * atanf(player->plane_y) / M_PI * 180));
 
     // render buffers
     unsigned int *pixel_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(unsigned int));
