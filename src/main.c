@@ -4,6 +4,7 @@
 #include <SDL/SDL_mixer.h>
 #include <SDL/SDL_ttf.h>
 #include <SDL/SDL.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,6 +57,8 @@
 #define FPS_CAP 60
 #define FRAME_DELAY (1000 / FPS_CAP)
 
+#define FONT_SIZE 12
+
 struct object
 {
     float x;
@@ -81,6 +84,7 @@ void player_rotate(struct player *player, float angle);
 void comb_sort(int *order, float *dist, int amount);
 unsigned int color_darken(unsigned int color);
 unsigned int color_fog(unsigned int color, float distance);
+void draw_text(SDL_Renderer *renderer, TTF_Font *font, int x, int y, SDL_Color fg, const char *const fmt, ...);
 
 unsigned char wall_map[MAP_WIDTH][MAP_HEIGHT] = {
     {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4, 4, 6, 4, 4, 6, 4, 6, 4, 4, 4, 6, 4},
@@ -1030,68 +1034,51 @@ int main(int argc, char *args[])
             WINDOW_WIDTH * sizeof(unsigned int));
         SDL_RenderCopy(renderer, screen, NULL, NULL);
 
-        // display FPS
         {
-            char buffer[256];
-            sprintf_s(buffer, sizeof(buffer), "FPS: %d", fps);
-            SDL_Surface *text_surface = TTF_RenderText_Solid(font, buffer, (SDL_Color){255, 255, 255, 255});
-            SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
-            SDL_FreeSurface(text_surface);
-            SDL_Rect text_rect;
-            text_rect.x = 0;
-            text_rect.y = 0;
-            text_rect.w = 24 * strlen(buffer);
-            text_rect.h = 25;
-            SDL_RenderCopy(renderer, text_texture, NULL, &text_rect);
-            SDL_DestroyTexture(text_texture);
-        }
+            int line = 0;
 
-        // display position
-        {
-            char buffer[256];
-            sprintf_s(buffer, sizeof(buffer), "Pos: (%f, %f)", player->pos_x, player->pos_y);
-            SDL_Surface *text_surface = TTF_RenderText_Solid(font, buffer, (SDL_Color){255, 255, 255, 255});
-            SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
-            SDL_FreeSurface(text_surface);
-            SDL_Rect text_rect;
-            text_rect.x = 0;
-            text_rect.y = 25;
-            text_rect.w = 24 * strlen(buffer);
-            text_rect.h = 25;
-            SDL_RenderCopy(renderer, text_texture, NULL, &text_rect);
-            SDL_DestroyTexture(text_texture);
-        }
+            // display FPS
+            draw_text(
+                renderer,
+                font,
+                0,
+                FONT_SIZE * line++,
+                (SDL_Color){255, 255, 255, 255},
+                "FPS: %d",
+                fps);
 
-        // display direction
-        {
-            char buffer[256];
-            sprintf_s(buffer, sizeof(buffer), "Dir: (%f, %f)", player->dir_x, player->dir_y);
-            SDL_Surface *text_surface = TTF_RenderText_Solid(font, buffer, (SDL_Color){255, 255, 255, 255});
-            SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
-            SDL_FreeSurface(text_surface);
-            SDL_Rect text_rect;
-            text_rect.x = 0;
-            text_rect.y = 50;
-            text_rect.w = 24 * strlen(buffer);
-            text_rect.h = 25;
-            SDL_RenderCopy(renderer, text_texture, NULL, &text_rect);
-            SDL_DestroyTexture(text_texture);
-        }
+            // display position
+            draw_text(
+                renderer,
+                font,
+                0,
+                FONT_SIZE * line++,
+                (SDL_Color){255, 255, 255, 255},
+                "Pos: (%f, %f)",
+                player->pos_x,
+                player->pos_y);
 
-        // display camera plane
-        {
-            char buffer[256];
-            sprintf_s(buffer, sizeof(buffer), "Plane: (%f, %f)", player->plane_x, player->plane_y);
-            SDL_Surface *text_surface = TTF_RenderText_Solid(font, buffer, (SDL_Color){255, 255, 255, 255});
-            SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
-            SDL_FreeSurface(text_surface);
-            SDL_Rect text_rect;
-            text_rect.x = 0;
-            text_rect.y = 75;
-            text_rect.w = 24 * strlen(buffer);
-            text_rect.h = 25;
-            SDL_RenderCopy(renderer, text_texture, NULL, &text_rect);
-            SDL_DestroyTexture(text_texture);
+            // display direction
+            draw_text(
+                renderer,
+                font,
+                0,
+                FONT_SIZE * line++,
+                (SDL_Color){255, 255, 255, 255},
+                "Dir: (%f, %f)",
+                player->dir_x,
+                player->dir_y);
+
+            // display camera plane
+            draw_text(
+                renderer,
+                font,
+                0,
+                FONT_SIZE * line++,
+                (SDL_Color){255, 255, 255, 255},
+                "Plane: (%f, %f)",
+                player->plane_x,
+                player->plane_y);
         }
 
         // display the renderer
@@ -1245,4 +1232,32 @@ unsigned int color_fog(unsigned int color, float distance)
 
     // recombine the colors
     return ((red & 0x0ff) << 16) | ((green & 0x0ff) << 8) | (blue & 0x0ff);
+}
+
+void draw_text(SDL_Renderer *renderer, TTF_Font *font, int x, int y, SDL_Color fg, const char *const fmt, ...)
+{
+    char text[256];
+
+    va_list ap;
+    va_start(ap, fmt);
+
+    vsprintf_s(text, sizeof(text), fmt, ap);
+
+    va_end(ap);
+
+    SDL_Surface *text_surface = TTF_RenderText_Solid(font, text, fg);
+
+    SDL_Texture *text_texture = SDL_CreateTextureFromSurface(renderer, text_surface);
+
+    SDL_FreeSurface(text_surface);
+
+    SDL_Rect text_rect;
+    text_rect.x = x;
+    text_rect.y = y;
+    text_rect.w = FONT_SIZE * strlen(text);
+    text_rect.h = FONT_SIZE;
+
+    SDL_RenderCopy(renderer, text_texture, NULL, &text_rect);
+
+    SDL_DestroyTexture(text_texture);
 }
