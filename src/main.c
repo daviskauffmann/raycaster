@@ -46,7 +46,7 @@
 
 #define MOVE_SPEED 5.0f
 #define SPRINT_MULT 2.0f
-#define ROTATE_SENSITIVITY 3.0f
+#define ROTATE_SPEED 3.0f
 #define MOUSE_SENSITIVITY 2.0f
 
 #define FLOOR_TEXTURE_MULT 1
@@ -540,7 +540,7 @@ int main(int argc, char *args[])
 
         // calculate rotation angle
         // the constant value is in radians/second
-        float angle = ROTATE_SENSITIVITY * delta_time;
+        float angle = ROTATE_SPEED * delta_time;
 
         if (keys[SDL_SCANCODE_Q])
         {
