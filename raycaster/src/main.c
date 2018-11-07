@@ -241,14 +241,6 @@ int main(int argc, char *args[])
     // load fonts
     TTF_Font *font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
 
-    // game settings
-    bool textured = true;
-    bool draw_walls = true;
-    bool draw_floor = true;
-    bool draw_billboards = true;
-    bool shading = true;
-    bool foggy = true;
-
     // setup player
     struct player *player = malloc(sizeof(struct player));
 
@@ -265,13 +257,19 @@ int main(int argc, char *args[])
     unsigned int *pixel_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(unsigned int));
     float *depth_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(float));
 
-    // system settings
-    bool quit = false;
+    // game settings
     unsigned int current_time = 0;
     float fps_update_timer = 0.0f;
     unsigned int fps = 0;
+    bool textured = true;
+    bool draw_walls = true;
+    bool draw_floor = true;
+    bool draw_billboards = true;
+    bool shading = true;
+    bool foggy = true;
 
     // main loop
+    bool quit = false;
     while (!quit)
     {
         // timer for fps cap
