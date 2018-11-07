@@ -1,6 +1,5 @@
 #include <float.h>
 #include <math.h>
-#include <raycaster/bitmap.h>
 #include <SDL/SDL_image.h>
 #include <SDL/SDL_mixer.h>
 #include <SDL/SDL_ttf.h>
@@ -11,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define SDL_FLAGS SDL_INIT_VIDEO | SDL_INIT_AUDIO
+#define SDL_FLAGS (SDL_INIT_VIDEO | SDL_INIT_AUDIO)
 
 #define WINDOW_TITLE "Raycaster"
 #define WINDOW_X SDL_WINDOWPOS_UNDEFINED
@@ -50,6 +49,13 @@
 
 #define FONT_SIZE 12
 
+struct bitmap
+{
+    int width;
+    int height;
+    unsigned int *pixels;
+};
+
 struct billboard
 {
     float x;
@@ -70,6 +76,10 @@ struct player
     float plane_y;
 };
 
+struct bitmap *bitmap_create(const char *file);
+void bitmap_destroy(struct bitmap *bitmap);
+unsigned int get_pixel(SDL_Surface *surface, int x, int y);
+void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
 void player_move(struct player *player, float dx, float dy);
 void player_rotate(struct player *player, float angle);
 void comb_sort(int *order, float *dist, int amount);
@@ -183,13 +193,9 @@ struct billboard billboards[NUM_BILLBOARDS] = {
 int main(int argc, char *args[])
 {
     // init SDL
-    if (SDL_Init(SDL_FLAGS) != 0)
-    {
-        printf("Error: %s\n", SDL_GetError());
-
-        return 1;
-    }
-
+    SDL_Init(SDL_FLAGS);
+    IMG_Init(IMG_FLAGS);
+    TTF_Init();
     SDL_SetRelativeMouseMode(SDL_TRUE);
 
     // create window
@@ -201,25 +207,11 @@ int main(int argc, char *args[])
         WINDOW_HEIGHT,
         WINDOW_FLAGS);
 
-    if (!window)
-    {
-        printf("Error: %s\n", SDL_GetError());
-
-        return 1;
-    }
-
     // create renderer
     SDL_Renderer *renderer = SDL_CreateRenderer(
         window,
         RENDERER_INDEX,
         RENDERER_FLAGS);
-
-    if (!renderer)
-    {
-        printf("Error: %s\n", SDL_GetError());
-
-        return 1;
-    }
 
     // create screen texture
     SDL_Texture *screen = SDL_CreateTexture(
@@ -228,31 +220,6 @@ int main(int argc, char *args[])
         SCREEN_ACCESS,
         WINDOW_WIDTH,
         WINDOW_HEIGHT);
-
-    if (!screen)
-    {
-        printf("Error: %s\n", SDL_GetError());
-
-        return 1;
-    }
-
-    // init SDL_image
-    if ((IMG_Init(IMG_FLAGS) & (IMG_FLAGS)) != (IMG_FLAGS))
-    {
-        printf("Error: %s\n", IMG_GetError());
-
-        return 1;
-    }
-
-    // init SDL_ttf
-    if (TTF_Init() != 0)
-    {
-        printf("Error: %s\n", TTF_GetError());
-
-        return 1;
-    }
-
-    SDL_SetRelativeMouseMode(true);
 
     // load textures
     struct bitmap *textures[NUM_TEXTURES];
@@ -298,9 +265,13 @@ int main(int argc, char *args[])
     unsigned int *pixel_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(unsigned int));
     float *depth_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(float));
 
-    // main loop
+    // system settings
     bool quit = false;
     unsigned int current_time = 0;
+    float fps_update_timer = 0.0f;
+    unsigned int fps = 0;
+
+    // main loop
     while (!quit)
     {
         // timer for fps cap
@@ -312,8 +283,6 @@ int main(int argc, char *args[])
         float delta_time = (current_time - previous_time) / 1000.0f;
 
         // calculate fps
-        static float fps_update_timer = 0.0f;
-        static unsigned int fps = 0;
         fps_update_timer += delta_time;
         if (fps_update_timer >= 0.25f)
         {
@@ -1047,6 +1016,114 @@ int main(int argc, char *args[])
     SDL_Quit();
 
     return 0;
+}
+
+struct bitmap *bitmap_create(const char *file)
+{
+    SDL_Surface *surface = IMG_Load(file);
+
+    struct bitmap *bitmap = malloc(sizeof(struct bitmap));
+    bitmap->width = surface->w;
+    bitmap->height = surface->h;
+    bitmap->pixels = malloc(bitmap->width * bitmap->height * sizeof(unsigned int));
+    for (int x = 0; x < bitmap->width; x++)
+    {
+        for (int y = 0; y < bitmap->height; y++)
+        {
+            bitmap->pixels[x + y * bitmap->width] = get_pixel(surface, x, y);
+        }
+    }
+
+    SDL_FreeSurface(surface);
+
+    return bitmap;
+}
+
+void bitmap_destroy(struct bitmap *bitmap)
+{
+    free(bitmap->pixels);
+    free(bitmap);
+}
+
+unsigned int get_pixel(SDL_Surface *surface, int x, int y)
+{
+    int bpp = surface->format->BytesPerPixel;
+
+    // here p is the address to the pixel we want to retrieve
+    unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
+
+    switch (bpp)
+    {
+    case 1:
+    {
+        return *p;
+    }
+    break;
+    case 2:
+    {
+        return *(unsigned short *)p;
+    }
+    break;
+    case 3:
+    {
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+        return p[0] << 16 | p[1] << 8 | p[2];
+#else
+        return p[0] | p[1] << 8 | p[2] << 16;
+#endif
+    }
+    break;
+    case 4:
+    {
+        return *(unsigned int *)p;
+    }
+    break;
+    default:
+    {
+        return 0; // shouldn't happen, but avoids warnings
+    }
+    break;
+    }
+}
+
+void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
+{
+    int bpp = surface->format->BytesPerPixel;
+
+    // here p is the address to the pixel we want to retrieve
+    unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
+
+    switch (bpp)
+    {
+    case 1:
+    {
+        *p = (unsigned char)pixel;
+    }
+    break;
+    case 2:
+    {
+        *(unsigned short *)p = (unsigned short)pixel;
+    }
+    break;
+    case 3:
+    {
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+        p[0] = (pixel >> 16) & 0xff;
+        p[1] = (pixel >> 8) & 0xff;
+        p[2] = pixel & 0xff;
+#else
+        p[0] = pixel & 0xff;
+        p[1] = (pixel >> 8) & 0xff;
+        p[2] = (pixel >> 16) & 0xff;
+#endif
+    }
+    break;
+    case 4:
+    {
+        *(unsigned int *)p = pixel;
+    }
+    break;
+    }
 }
 
 void player_move(struct player *player, float dx, float dy)
