@@ -703,25 +703,34 @@ int main(int argc, char *args[])
                     switch (wall_map[map_x][map_y])
                     {
                     case 0:
-                        color = 0xff00ffff; // yellow
-                        break;
-                    case 1:
                         color = 0xff0000ff; // red
                         break;
-                    case 2:
+                    case 1:
                         color = 0xff00ff00; // green
                         break;
-                    case 3:
+                    case 2:
                         color = 0xffff0000; // blue
                         break;
+                    case 3:
+                        color = 0xffffff00; // cyan
+                        break;
                     case 4:
-                        color = 0xffff00ff; // purple
+                        color = 0xffff00ff; // magenta
                         break;
                     case 5:
-                        color = 0xffffff00; // yellow
+                        color = 0xff00ffff; // yellow
+                        break;
+                    case 6:
+                        color = 0xff800080; // purple
+                        break;
+                    case 7:
+                        color = 0xff000080; // maroon
+                        break;
+                    case 8:
+                        color = 0xffffffff; // white
                         break;
                     default:
-                        color = 0xffffffff; // white
+                        color = 0x00000000; // black
                         break;
                     }
 
@@ -1005,6 +1014,7 @@ void player_move(struct player *player, float dx, float dy)
     {
         player->pos_x += dx;
     }
+
     if (wall_map[(int)(player->pos_x)][(int)(player->pos_y + dy)] == 0)
     {
         player->pos_y += dy;
@@ -1030,6 +1040,7 @@ void comb_sort(int *order, float *dist, int amount)
 {
     int gap = amount;
     bool swapped = false;
+
     while (gap > 1 || swapped)
     {
         // shrink factor 1.3
@@ -1044,9 +1055,11 @@ void comb_sort(int *order, float *dist, int amount)
         }
 
         swapped = false;
+
         for (int i = 0; i < amount - gap; i++)
         {
             int j = i + gap;
+
             if (dist[i] < dist[j])
             {
                 float temp_dist = dist[i];
