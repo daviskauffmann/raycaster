@@ -108,11 +108,7 @@
     </PreLinkEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\bitmap.c" />
     <ClCompile Include="src\main.c" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="include\raycaster\bitmap.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

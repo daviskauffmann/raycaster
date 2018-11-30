@@ -1,6 +1,5 @@
 #include <float.h>
 #include <math.h>
-#include <raycaster/bitmap.h>
 #include <SDL/SDL_image.h>
 #include <SDL/SDL_mixer.h>
 #include <SDL/SDL_ttf.h>
@@ -11,22 +10,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define SDL_FLAGS SDL_INIT_VIDEO
-
 #define WINDOW_TITLE "Raycaster"
-#define WINDOW_X SDL_WINDOWPOS_UNDEFINED
-#define WINDOW_Y SDL_WINDOWPOS_UNDEFINED
 #define WINDOW_WIDTH 320
 #define WINDOW_HEIGHT 200
-#define WINDOW_FLAGS 0
-
-#define RENDERER_INDEX -1
-#define RENDERER_FLAGS 0
-
-#define SCREEN_FORMAT SDL_PIXELFORMAT_ABGR8888
-#define SCREEN_ACCESS SDL_TEXTUREACCESS_STREAMING
-
-#define IMG_FLAGS IMG_INIT_PNG
 
 #define NUM_TEXTURES 8
 #define NUM_SPRITES 3
@@ -50,6 +36,23 @@
 
 #define FONT_SIZE 12
 
+struct bitmap
+{
+    int width;
+    int height;
+    unsigned int *pixels;
+};
+
+struct camera
+{
+    float pos_x;
+    float pos_y;
+    float dir_x;
+    float dir_y;
+    float plane_x;
+    float plane_y;
+};
+
 struct billboard
 {
     float x;
@@ -60,18 +63,12 @@ struct billboard
     float sprite_translate_y;
 };
 
-struct player
-{
-    float pos_x;
-    float pos_y;
-    float dir_x;
-    float dir_y;
-    float plane_x;
-    float plane_y;
-};
-
-void player_move(struct player *player, float dx, float dy);
-void player_rotate(struct player *player, float angle);
+struct bitmap *bitmap_create(const char *file);
+void bitmap_destroy(struct bitmap *bitmap);
+unsigned int get_pixel(SDL_Surface *surface, int x, int y);
+void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
+void camera_move(struct camera *camera, float dx, float dy);
+void camera_rotate(struct camera *camera, float angle);
 void comb_sort(int *order, float *dist, int amount);
 unsigned int color_darken(unsigned int color);
 unsigned int color_fog(unsigned int color, float distance);
@@ -183,31 +180,31 @@ struct billboard billboards[NUM_BILLBOARDS] = {
 int main(int argc, char *args[])
 {
     // init SDL
-    SDL_Init(SDL_FLAGS);
-    IMG_Init(IMG_FLAGS);
+    SDL_Init(SDL_INIT_VIDEO);
+    IMG_Init(IMG_INIT_PNG);
     TTF_Init();
     SDL_SetRelativeMouseMode(SDL_TRUE);
 
     // create window
     SDL_Window *window = SDL_CreateWindow(
         WINDOW_TITLE,
-        WINDOW_X,
-        WINDOW_Y,
+        SDL_WINDOWPOS_UNDEFINED,
+        SDL_WINDOWPOS_UNDEFINED,
         WINDOW_WIDTH,
         WINDOW_HEIGHT,
-        WINDOW_FLAGS);
+        0);
 
     // create renderer
     SDL_Renderer *renderer = SDL_CreateRenderer(
         window,
-        RENDERER_INDEX,
-        RENDERER_FLAGS);
+        -1,
+        0);
 
     // create screen texture
     SDL_Texture *screen = SDL_CreateTexture(
         renderer,
-        SCREEN_FORMAT,
-        SCREEN_ACCESS,
+        SDL_PIXELFORMAT_ABGR8888,
+        SDL_TEXTUREACCESS_STREAMING,
         WINDOW_WIDTH,
         WINDOW_HEIGHT);
 
@@ -231,17 +228,17 @@ int main(int argc, char *args[])
     // load fonts
     TTF_Font *font = TTF_OpenFont("assets/fonts/VeraMono.ttf", 24);
 
-    // setup player
-    struct player *player = malloc(sizeof(struct player));
+    // setup camera
+    struct camera *camera = malloc(sizeof(struct camera));
 
-    player->pos_x = 22.0f;
-    player->pos_y = 11.5f;
-    player->dir_x = -1.0f;
-    player->dir_y = 0.0f;
-    player->plane_x = 0.0f;
-    player->plane_y = 1.0f;
+    camera->pos_x = 22.0f;
+    camera->pos_y = 11.5f;
+    camera->dir_x = -1.0f;
+    camera->dir_y = 0.0f;
+    camera->plane_x = 0.0f;
+    camera->plane_y = 1.0f;
 
-    printf("FOV: %d\n", (int)(2 * atanf(player->plane_y) / M_PI * 180));
+    printf("FOV: %d\n", (int)(2 * atanf(camera->plane_y) / M_PI * 180));
 
     // render buffers
     unsigned int *pixel_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(unsigned int));
@@ -292,7 +289,7 @@ int main(int argc, char *args[])
                 // calculate rotation angle
                 float angle = -mouse_dx / 1000.0f * MOUSE_SENSITIVITY;
 
-                player_rotate(player, angle);
+                camera_rotate(camera, angle);
             }
             break;
             case SDL_KEYDOWN:
@@ -385,37 +382,37 @@ int main(int argc, char *args[])
         // move forward
         if (keys[SDL_SCANCODE_W])
         {
-            float dx = player->dir_x * speed;
-            float dy = player->dir_y * speed;
+            float dx = camera->dir_x * speed;
+            float dy = camera->dir_y * speed;
 
-            player_move(player, dx, dy);
+            camera_move(camera, dx, dy);
         }
 
         // strafe left
         if (keys[SDL_SCANCODE_A])
         {
-            float dx = -player->dir_y * speed;
-            float dy = player->dir_x * speed;
+            float dx = -camera->dir_y * speed;
+            float dy = camera->dir_x * speed;
 
-            player_move(player, dx, dy);
+            camera_move(camera, dx, dy);
         }
 
         // move backward
         if (keys[SDL_SCANCODE_S])
         {
-            float dx = -player->dir_x * speed;
-            float dy = -player->dir_y * speed;
+            float dx = -camera->dir_x * speed;
+            float dy = -camera->dir_y * speed;
 
-            player_move(player, dx, dy);
+            camera_move(camera, dx, dy);
         }
 
         // strafe right
         if (keys[SDL_SCANCODE_D])
         {
-            float dx = player->dir_y * speed;
-            float dy = -player->dir_x * speed;
+            float dx = camera->dir_y * speed;
+            float dy = -camera->dir_x * speed;
 
-            player_move(player, dx, dy);
+            camera_move(camera, dx, dy);
         }
 
         // calculate rotation angle
@@ -425,13 +422,13 @@ int main(int argc, char *args[])
         // rotate left
         if (keys[SDL_SCANCODE_Q])
         {
-            player_rotate(player, angle);
+            camera_rotate(camera, angle);
         }
 
         // rotate right
         if (keys[SDL_SCANCODE_E])
         {
-            player_rotate(player, -angle);
+            camera_rotate(camera, -angle);
         }
 
         // raycasting
@@ -449,12 +446,12 @@ int main(int argc, char *args[])
             float camera_x = (2.0f * x / WINDOW_WIDTH) - 1;
 
             // calculate ray position and direction
-            float ray_dir_x = (camera_x * player->plane_x) + player->dir_x;
-            float ray_dir_y = (camera_x * player->plane_y) + player->dir_y;
+            float ray_dir_x = (camera_x * camera->plane_x) + camera->dir_x;
+            float ray_dir_y = (camera_x * camera->plane_y) + camera->dir_y;
 
             // which box of the map we're in
-            int map_x = (int)player->pos_x;
-            int map_y = (int)player->pos_y;
+            int map_x = (int)camera->pos_x;
+            int map_y = (int)camera->pos_y;
 
             // length of ray from current position to next x or y-side
             float side_dist_x;
@@ -471,22 +468,22 @@ int main(int argc, char *args[])
             // calculate step and initial side_dist
             if (ray_dir_x < 0)
             {
-                side_dist_x = (player->pos_x - map_x) * delta_dist_x;
+                side_dist_x = (camera->pos_x - map_x) * delta_dist_x;
                 step_x = -1;
             }
             else
             {
-                side_dist_x = (map_x + 1 - player->pos_x) * delta_dist_x;
+                side_dist_x = (map_x + 1 - camera->pos_x) * delta_dist_x;
                 step_x = 1;
             }
             if (ray_dir_y < 0)
             {
-                side_dist_y = (player->pos_y - map_y) * delta_dist_y;
+                side_dist_y = (camera->pos_y - map_y) * delta_dist_y;
                 step_y = -1;
             }
             else
             {
-                side_dist_y = (map_y + 1 - player->pos_y) * delta_dist_y;
+                side_dist_y = (map_y + 1 - camera->pos_y) * delta_dist_y;
                 step_y = 1;
             }
 
@@ -520,8 +517,8 @@ int main(int argc, char *args[])
             // calculate distance projected on camera direction (Euclidean distance will give fisheye effect!)
             float perp_wall_dist =
                 side == 0
-                ? (map_x - player->pos_x + (1 - step_x) / 2) / ray_dir_x
-                : (map_y - player->pos_y + (1 - step_y) / 2) / ray_dir_y;
+                ? (map_x - camera->pos_x + (1 - step_x) / 2) / ray_dir_x
+                : (map_y - camera->pos_y + (1 - step_y) / 2) / ray_dir_y;
 
             // calculate height of line to draw on screen
             int line_height = (int)(WINDOW_HEIGHT / perp_wall_dist);
@@ -544,11 +541,11 @@ int main(int argc, char *args[])
                 float wall_x;
                 if (side == 0)
                 {
-                    wall_x = player->pos_y + perp_wall_dist * ray_dir_y;
+                    wall_x = camera->pos_y + perp_wall_dist * ray_dir_y;
                 }
                 else
                 {
-                    wall_x = player->pos_x + perp_wall_dist * ray_dir_x;
+                    wall_x = camera->pos_x + perp_wall_dist * ray_dir_x;
                 }
                 wall_x -= floorf(wall_x);
 
@@ -635,8 +632,8 @@ int main(int argc, char *args[])
                         float current_dist = WINDOW_HEIGHT / (2.0f * y - WINDOW_HEIGHT);
                         float weight = current_dist / perp_wall_dist;
 
-                        float current_x = weight * floor_x_wall + (1 - weight) * player->pos_x;
-                        float current_y = weight * floor_y_wall + (1 - weight) * player->pos_y;
+                        float current_x = weight * floor_x_wall + (1 - weight) * camera->pos_x;
+                        float current_y = weight * floor_y_wall + (1 - weight) * camera->pos_y;
 
                         // floor
                         {
@@ -793,7 +790,7 @@ int main(int argc, char *args[])
             for (int i = 0; i < NUM_BILLBOARDS; i++)
             {
                 billboard_order[i] = i;
-                billboard_dist[i] = powf(player->pos_x - billboards[i].x, 2) + powf(player->pos_y - billboards[i].y, 2);
+                billboard_dist[i] = powf(camera->pos_x - billboards[i].x, 2) + powf(camera->pos_y - billboards[i].y, 2);
             }
             comb_sort(billboard_order, billboard_dist, NUM_BILLBOARDS);
 
@@ -803,19 +800,19 @@ int main(int argc, char *args[])
                 struct billboard billboard = billboards[billboard_order[i]];
 
                 // translate billboard position to relative to camera
-                float billboard_x = billboard.x - player->pos_x;
-                float billboard_y = billboard.y - player->pos_y;
+                float billboard_x = billboard.x - camera->pos_x;
+                float billboard_y = billboard.y - camera->pos_y;
 
                 // transform billboard with the inverse camera matrix
                 // [ planeX   dirX ] -1                                         [ dirY      -dirX ]
                 // [               ]    = 1 / (planeX * dirY - dirX * planeY) * [                 ]
                 // [ planeY   dirY ]                                            [ -planeY  planeX ]
                 // required for correct matrix multiplication
-                float inv_det = 1 / (player->plane_x * player->dir_y - player->dir_x * player->plane_y);
+                float inv_det = 1 / (camera->plane_x * camera->dir_y - camera->dir_x * camera->plane_y);
 
                 // transform_y is actually the depth inside the screen, that what Z is in 3D
-                float transform_x = inv_det * (player->dir_y * billboard_x - player->dir_x * billboard_y);
-                float transform_y = inv_det * (-player->plane_y * billboard_x + player->plane_x * billboard_y);
+                float transform_x = inv_det * (camera->dir_y * billboard_x - camera->dir_x * billboard_y);
+                float transform_y = inv_det * (-camera->plane_y * billboard_x + camera->plane_x * billboard_y);
 
                 // where the billboard is on the screen
                 int billboard_screen_x = (int)((WINDOW_WIDTH / 2) * (1 + transform_x / transform_y));
@@ -852,7 +849,7 @@ int main(int argc, char *args[])
                     draw_end_y = WINDOW_HEIGHT - 1;
                 }
 
-                // calculate angle of billboard to player
+                // calculate angle of billboard to camera
                 // float angle = atan2f(billboard_y, billboard_x);
 
                 // choose the sprite
@@ -939,8 +936,8 @@ int main(int argc, char *args[])
                 FONT_SIZE * line++,
                 white_color,
                 "Pos: (%f, %f)",
-                player->pos_x,
-                player->pos_y);
+                camera->pos_x,
+                camera->pos_y);
 
             // display direction
             draw_text(
@@ -951,8 +948,8 @@ int main(int argc, char *args[])
                 FONT_SIZE * line++,
                 white_color,
                 "Dir: (%f, %f)",
-                player->dir_x,
-                player->dir_y);
+                camera->dir_x,
+                camera->dir_y);
 
             // display camera plane
             draw_text(
@@ -963,8 +960,8 @@ int main(int argc, char *args[])
                 FONT_SIZE * line++,
                 white_color,
                 "Plane: (%f, %f)",
-                player->plane_x,
-                player->plane_y);
+                camera->plane_x,
+                camera->plane_y);
         }
 
         // display the renderer
@@ -984,7 +981,7 @@ int main(int argc, char *args[])
     free(depth_buffer);
     free(pixel_buffer);
 
-    free(player);
+    free(camera);
 
     TTF_CloseFont(font);
 
@@ -1008,32 +1005,151 @@ int main(int argc, char *args[])
     return 0;
 }
 
-void player_move(struct player *player, float dx, float dy)
+struct bitmap *bitmap_create(const char *file)
 {
-    if (wall_map[(int)(player->pos_x + dx)][(int)(player->pos_y)] == 0)
+    struct bitmap *bitmap = malloc(sizeof(struct bitmap));
+
+    if (!bitmap)
     {
-        player->pos_x += dx;
+        return NULL;
     }
 
-    if (wall_map[(int)(player->pos_x)][(int)(player->pos_y + dy)] == 0)
+    SDL_Surface *surface = IMG_Load(file);
+
+    if (!surface)
     {
-        player->pos_y += dy;
+        return NULL;
+    }
+
+    bitmap->width = surface->w;
+    bitmap->height = surface->h;
+    bitmap->pixels = malloc(bitmap->width * bitmap->height * sizeof(unsigned int));
+    for (int x = 0; x < bitmap->width; x++)
+    {
+        for (int y = 0; y < bitmap->height; y++)
+        {
+            bitmap->pixels[x + y * bitmap->width] = get_pixel(surface, x, y);
+        }
+    }
+
+    SDL_FreeSurface(surface);
+
+    return bitmap;
+}
+
+void bitmap_destroy(struct bitmap *bitmap)
+{
+    free(bitmap->pixels);
+    free(bitmap);
+}
+
+unsigned int get_pixel(SDL_Surface *surface, int x, int y)
+{
+    int bpp = surface->format->BytesPerPixel;
+
+    // here p is the address to the pixel we want to retrieve
+    unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
+
+    switch (bpp)
+    {
+    case 1:
+    {
+        return *p;
+    }
+    break;
+    case 2:
+    {
+        return *(unsigned short *)p;
+    }
+    break;
+    case 3:
+    {
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+        return p[0] << 16 | p[1] << 8 | p[2];
+#else
+        return p[0] | p[1] << 8 | p[2] << 16;
+#endif
+    }
+    break;
+    case 4:
+    {
+        return *(unsigned int *)p;
+    }
+    break;
+    default:
+    {
+        return 0; // shouldn't happen, but avoids warnings
+    }
+    break;
     }
 }
 
-void player_rotate(struct player *player, float angle)
+void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
+{
+    int bpp = surface->format->BytesPerPixel;
+
+    // here p is the address to the pixel we want to retrieve
+    unsigned char *p = (unsigned char *)surface->pixels + y * surface->pitch + x * bpp;
+
+    switch (bpp)
+    {
+    case 1:
+    {
+        *p = (unsigned char)pixel;
+    }
+    break;
+    case 2:
+    {
+        *(unsigned short *)p = (unsigned short)pixel;
+    }
+    break;
+    case 3:
+    {
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+        p[0] = (pixel >> 16) & 0xff;
+        p[1] = (pixel >> 8) & 0xff;
+        p[2] = pixel & 0xff;
+#else
+        p[0] = pixel & 0xff;
+        p[1] = (pixel >> 8) & 0xff;
+        p[2] = (pixel >> 16) & 0xff;
+#endif
+    }
+    break;
+    case 4:
+    {
+        *(unsigned int *)p = pixel;
+    }
+    break;
+    }
+}
+
+void camera_move(struct camera *camera, float dx, float dy)
+{
+    if (wall_map[(int)(camera->pos_x + dx)][(int)(camera->pos_y)] == 0)
+    {
+        camera->pos_x += dx;
+    }
+
+    if (wall_map[(int)(camera->pos_x)][(int)(camera->pos_y + dy)] == 0)
+    {
+        camera->pos_y += dy;
+    }
+}
+
+void camera_rotate(struct camera *camera, float angle)
 {
     float rot_x = cosf(angle);
     float rot_y = sinf(angle);
 
     // both camera direction and camera plane must be rotated
-    float old_dir_x = player->dir_x;
-    player->dir_x = player->dir_x * rot_x - player->dir_y * rot_y;
-    player->dir_y = old_dir_x * rot_y + player->dir_y * rot_x;
+    float old_dir_x = camera->dir_x;
+    camera->dir_x = camera->dir_x * rot_x - camera->dir_y * rot_y;
+    camera->dir_y = old_dir_x * rot_y + camera->dir_y * rot_x;
 
-    float old_plane_x = player->plane_x;
-    player->plane_x = player->plane_x * rot_x - player->plane_y * rot_y;
-    player->plane_y = old_plane_x * rot_y + player->plane_y * rot_x;
+    float old_plane_x = camera->plane_x;
+    camera->plane_x = camera->plane_x * rot_x - camera->plane_y * rot_y;
+    camera->plane_y = old_plane_x * rot_y + camera->plane_y * rot_x;
 }
 
 void comb_sort(int *order, float *dist, int amount)
