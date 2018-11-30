@@ -1,14 +1,14 @@
 #include <float.h>
 #include <math.h>
-#include <SDL/SDL_image.h>
-#include <SDL/SDL_mixer.h>
-#include <SDL/SDL_ttf.h>
-#include <SDL/SDL.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <SDL/SDL_image.h>
+#include <SDL/SDL_ttf.h>
+#include <SDL/SDL.h>
 
 #define WINDOW_TITLE "Raycaster"
 #define WINDOW_WIDTH 320
