@@ -198,7 +198,7 @@ int main(int argc, char *args[])
     SDL_Renderer *renderer = SDL_CreateRenderer(
         window,
         -1,
-        0);
+        SDL_RENDERER_SOFTWARE);
 
     // create screen texture
     SDL_Texture *screen = SDL_CreateTexture(
@@ -566,7 +566,7 @@ int main(int argc, char *args[])
                         texture_x = texture->width - texture_x - 1;
                     }
 
-                    for (int y = draw_start; y <= draw_end; y++)
+                    for (int y = draw_start; y < draw_end; y++)
                     {
                         // y coordinate on the texture
                         int texture_y = (((y * 256 - WINDOW_HEIGHT * 128 + line_height * 128) * texture->height) / line_height) / 256;
@@ -744,7 +744,7 @@ int main(int argc, char *args[])
                     }
 
                     // draw the pixels of the stripe as a vertical line
-                    for (int y = draw_start; y <= draw_end; y++)
+                    for (int y = draw_start; y < draw_end; y++)
                     {
                         pixel_buffer[x + y * WINDOW_WIDTH] = color;
                         depth_buffer[x + y * WINDOW_WIDTH] = perp_wall_dist;
@@ -911,6 +911,7 @@ int main(int argc, char *args[])
             WINDOW_WIDTH * sizeof(unsigned int));
         SDL_RenderCopy(renderer, screen, NULL, NULL);
 
+        // draw debug text
         {
             int line = 0;
 
