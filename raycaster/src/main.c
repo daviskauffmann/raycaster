@@ -21,7 +21,8 @@
 #define MAP_HEIGHT 24
 #define NUM_BILLBOARDS 19
 
-#define MOVE_SPEED 5.0f
+#define ACCELERATION 1.0f
+#define DRAG 0.8f
 #define SPRINT_MULT 2.0f
 #define ROTATE_SPEED 3.0f
 #define MOUSE_SENSITIVITY 2.0f
@@ -34,7 +35,7 @@
 #define FPS_CAP 60
 #define FRAME_DELAY (1000 / FPS_CAP)
 
-#define FONT_SIZE 12
+#define FONT_SIZE 16
 
 struct bitmap
 {
@@ -51,6 +52,8 @@ struct camera
     float dir_y;
     float plane_x;
     float plane_y;
+    float mov_x;
+    float mov_y;
 };
 
 struct billboard
@@ -237,6 +240,8 @@ int main(int argc, char *args[])
     camera->dir_y = 0.0f;
     camera->plane_x = 0.0f;
     camera->plane_y = 1.0f;
+    camera->mov_x = 0.0f;
+    camera->mov_y = 0.0f;
 
     printf("FOV: %d\n", (int)(2 * atanf(camera->plane_y) / M_PI * 180));
 
@@ -359,14 +364,13 @@ int main(int argc, char *args[])
             }
         }
 
-        // calculate base movement speed
-        // the constant value is in squares/second
-        float speed = MOVE_SPEED * delta_time;
+        // calculate acceleration
+        float acceleration = ACCELERATION * delta_time;
 
         // sprinting
         if (keys[SDL_SCANCODE_LSHIFT])
         {
-            speed *= SPRINT_MULT;
+            acceleration *= SPRINT_MULT;
         }
 
         // slow movement speed when moving diagonally
@@ -376,43 +380,45 @@ int main(int argc, char *args[])
             (keys[SDL_SCANCODE_S] && keys[SDL_SCANCODE_A]))
         {
             // precomputed 1 / sqrt(2)
-            speed *= 0.71f;
+            acceleration *= 0.71f;
         }
 
         // move forward
         if (keys[SDL_SCANCODE_W])
         {
-            float dx = camera->dir_x * speed;
-            float dy = camera->dir_y * speed;
-
-            camera_move(camera, dx, dy);
+            camera->mov_x += camera->dir_x * acceleration;
+            camera->mov_y += camera->dir_y * acceleration;
         }
 
         // strafe left
         if (keys[SDL_SCANCODE_A])
         {
-            float dx = -camera->dir_y * speed;
-            float dy = camera->dir_x * speed;
-
-            camera_move(camera, dx, dy);
+            camera->mov_x += -camera->dir_y * acceleration;
+            camera->mov_y += camera->dir_x * acceleration;
         }
 
         // move backward
         if (keys[SDL_SCANCODE_S])
         {
-            float dx = -camera->dir_x * speed;
-            float dy = -camera->dir_y * speed;
-
-            camera_move(camera, dx, dy);
+            camera->mov_x += -camera->dir_x * acceleration;
+            camera->mov_y += -camera->dir_y * acceleration;
         }
 
         // strafe right
         if (keys[SDL_SCANCODE_D])
         {
-            float dx = camera->dir_y * speed;
-            float dy = -camera->dir_x * speed;
+            camera->mov_x += camera->dir_y * acceleration;
+            camera->mov_y += -camera->dir_x * acceleration;
+        }
 
-            camera_move(camera, dx, dy);
+        // decelerate
+        camera->mov_x *= DRAG;
+        camera->mov_y *= DRAG;
+
+        // apply movement
+        if (camera->mov_x > 0 || camera->mov_x < 0 || camera->mov_y > 0 || camera->mov_y < 0)
+        {
+            camera_move(camera, camera->mov_x, camera->mov_y);
         }
 
         // calculate rotation angle
@@ -925,7 +931,7 @@ int main(int argc, char *args[])
                 0,
                 FONT_SIZE * line++,
                 white_color,
-                "FPS: %d",
+                "fps: %d",
                 fps);
 
             // display position
@@ -936,7 +942,7 @@ int main(int argc, char *args[])
                 0,
                 FONT_SIZE * line++,
                 white_color,
-                "Pos: (%f, %f)",
+                "pos: (%f, %f)",
                 camera->pos_x,
                 camera->pos_y);
 
@@ -948,7 +954,7 @@ int main(int argc, char *args[])
                 0,
                 FONT_SIZE * line++,
                 white_color,
-                "Dir: (%f, %f)",
+                "dir: (%f, %f)",
                 camera->dir_x,
                 camera->dir_y);
 
@@ -960,9 +966,22 @@ int main(int argc, char *args[])
                 0,
                 FONT_SIZE * line++,
                 white_color,
-                "Plane: (%f, %f)",
+                "plane: (%f, %f)",
                 camera->plane_x,
                 camera->plane_y);
+
+            // display movement
+            draw_text(
+                renderer,
+                font,
+                FONT_SIZE,
+                0,
+                FONT_SIZE * line++,
+                white_color,
+                "mov: (%f, %f), acc: %f",
+                camera->mov_x,
+                camera->mov_y,
+                acceleration);
         }
 
         // display the renderer
@@ -1131,10 +1150,18 @@ void camera_move(struct camera *camera, float dx, float dy)
     {
         camera->pos_x += dx;
     }
+    else
+    {
+        camera->mov_x = 0.0f;
+    }
 
     if (wall_map[(int)(camera->pos_x)][(int)(camera->pos_y + dy)] == 0)
     {
         camera->pos_y += dy;
+    }
+    else
+    {
+        camera->mov_y = 0.0f;
     }
 }
 
