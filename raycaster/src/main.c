@@ -21,9 +21,9 @@
 #define MAP_HEIGHT 24
 #define NUM_BILLBOARDS 19
 
-#define ACCELERATION 1.0f
-#define DRAG 0.8f
+#define SPEED 20.0f
 #define SPRINT_MULT 2.0f
+#define DRAG 5.0f
 #define ROTATE_SPEED 3.0f
 #define MOUSE_SENSITIVITY 2.0f
 
@@ -50,10 +50,10 @@ struct camera
     float pos_y;
     float dir_x;
     float dir_y;
+    float vel_x;
+    float vel_y;
     float plane_x;
     float plane_y;
-    float mov_x;
-    float mov_y;
 };
 
 struct billboard
@@ -70,7 +70,7 @@ struct bitmap *bitmap_create(const char *file);
 void bitmap_destroy(struct bitmap *bitmap);
 unsigned int get_pixel(SDL_Surface *surface, int x, int y);
 void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel);
-void camera_move(struct camera *camera, float dx, float dy);
+void camera_accelerate(struct camera *camera, float acc_x, float acc_y, float delta_time);
 void camera_rotate(struct camera *camera, float angle);
 void comb_sort(int *order, float *dist, int amount);
 unsigned int color_darken(unsigned int color);
@@ -240,10 +240,10 @@ int main(int argc, char *args[])
     camera->dir_y = 0.0f;
     camera->plane_x = 0.0f;
     camera->plane_y = 1.0f;
-    camera->mov_x = 0.0f;
-    camera->mov_y = 0.0f;
+    camera->vel_x = 0.0f;
+    camera->vel_y = 0.0f;
 
-    printf("FOV: %d\n", (int)(2 * atanf(camera->plane_y) / M_PI * 180));
+    printf("FOV: %d\n", (int)(2.0f * atanf(camera->plane_y) / M_PI * 180));
 
     // render buffers
     unsigned int *pixel_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(unsigned int));
@@ -365,61 +365,64 @@ int main(int argc, char *args[])
         }
 
         // calculate acceleration
-        float acceleration = ACCELERATION * delta_time;
+        float acc_x = 0.0f;
+        float acc_y = 0.0f;
+
+        // move forward
+        if (keys[SDL_SCANCODE_W])
+        {
+            acc_x += camera->dir_x;
+            acc_y += camera->dir_y;
+        }
+
+        // strafe left
+        if (keys[SDL_SCANCODE_A])
+        {
+            acc_x += -camera->dir_y;
+            acc_y += camera->dir_x;
+        }
+
+        // move backward
+        if (keys[SDL_SCANCODE_S])
+        {
+            acc_x += -camera->dir_x;
+            acc_y += -camera->dir_y;
+        }
+
+        // strafe right
+        if (keys[SDL_SCANCODE_D])
+        {
+            acc_x += camera->dir_y;
+            acc_y += -camera->dir_x;
+        }
+
+        acc_x *= SPEED;
+        acc_y *= SPEED;
 
         // sprinting
         if (keys[SDL_SCANCODE_LSHIFT])
         {
-            acceleration *= SPRINT_MULT;
+            acc_x *= SPRINT_MULT;
+            acc_y *= SPRINT_MULT;
         }
 
-        // slow movement speed when moving diagonally
+        // slow acceleration when moving diagonally
         if ((keys[SDL_SCANCODE_W] && keys[SDL_SCANCODE_D]) ||
             (keys[SDL_SCANCODE_W] && keys[SDL_SCANCODE_A]) ||
             (keys[SDL_SCANCODE_S] && keys[SDL_SCANCODE_D]) ||
             (keys[SDL_SCANCODE_S] && keys[SDL_SCANCODE_A]))
         {
             // precomputed 1 / sqrt(2)
-            acceleration *= 0.71f;
-        }
-
-        // move forward
-        if (keys[SDL_SCANCODE_W])
-        {
-            camera->mov_x += camera->dir_x * acceleration;
-            camera->mov_y += camera->dir_y * acceleration;
-        }
-
-        // strafe left
-        if (keys[SDL_SCANCODE_A])
-        {
-            camera->mov_x += -camera->dir_y * acceleration;
-            camera->mov_y += camera->dir_x * acceleration;
-        }
-
-        // move backward
-        if (keys[SDL_SCANCODE_S])
-        {
-            camera->mov_x += -camera->dir_x * acceleration;
-            camera->mov_y += -camera->dir_y * acceleration;
-        }
-
-        // strafe right
-        if (keys[SDL_SCANCODE_D])
-        {
-            camera->mov_x += camera->dir_y * acceleration;
-            camera->mov_y += -camera->dir_x * acceleration;
+            acc_x *= 0.71f;
+            acc_y *= 0.71f;
         }
 
         // decelerate
-        camera->mov_x *= DRAG;
-        camera->mov_y *= DRAG;
+        acc_x -= camera->vel_x * DRAG;
+        acc_y -= camera->vel_y * DRAG;
 
         // apply movement
-        if (camera->mov_x > 0 || camera->mov_x < 0 || camera->mov_y > 0 || camera->mov_y < 0)
-        {
-            camera_move(camera, camera->mov_x, camera->mov_y);
-        }
+        camera_accelerate(camera, acc_x, acc_y, delta_time);
 
         // calculate rotation angle
         // the constant value is in radians/second
@@ -954,9 +957,38 @@ int main(int argc, char *args[])
                 0,
                 FONT_SIZE * line++,
                 white_color,
-                "dir: (%f, %f)",
+                "dir: (%f, %f), ang: %f",
                 camera->dir_x,
-                camera->dir_y);
+                camera->dir_y,
+                atanf(camera->dir_y / camera->dir_x) * 180.0f / (float)M_PI);
+
+            // display velocity
+            draw_text(
+                renderer,
+                font,
+                FONT_SIZE,
+                0,
+                FONT_SIZE *line++,
+                white_color,
+                "vel: (%f, %f), mag: %f, ang: %f",
+                camera->vel_x,
+                camera->vel_y,
+                sqrtf(powf(camera->vel_x, 2.0f) + powf(camera->vel_y, 2.0f)),
+                atanf(camera->vel_y / camera->vel_x) *180.0f / (float)M_PI);
+
+            // display acceleration
+            draw_text(
+                renderer,
+                font,
+                FONT_SIZE,
+                0,
+                FONT_SIZE *line++,
+                white_color,
+                "acc: (%f, %f), mag: %f, ang: %f",
+                acc_x,
+                acc_y,
+                sqrtf(powf(acc_x, 2.0f) + powf(acc_y, 2.0f)),
+                atanf(acc_y / acc_x) *180.0f / (float)M_PI);
 
             // display camera plane
             draw_text(
@@ -969,19 +1001,6 @@ int main(int argc, char *args[])
                 "plane: (%f, %f)",
                 camera->plane_x,
                 camera->plane_y);
-
-            // display movement
-            draw_text(
-                renderer,
-                font,
-                FONT_SIZE,
-                0,
-                FONT_SIZE * line++,
-                white_color,
-                "mov: (%f, %f), acc: %f",
-                camera->mov_x,
-                camera->mov_y,
-                acceleration);
         }
 
         // display the renderer
@@ -1141,27 +1160,32 @@ void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
         *(unsigned int *)p = pixel;
     }
     break;
-    }
+}
 }
 
-void camera_move(struct camera *camera, float dx, float dy)
+void camera_accelerate(struct camera *camera, float acc_x, float acc_y, float delta_time)
 {
-    if (wall_map[(int)(camera->pos_x + dx)][(int)(camera->pos_y)] == 0)
+    float new_pos_x = 0.5f * acc_x * powf(delta_time, 2) + camera->vel_x * delta_time + camera->pos_x;
+    float new_pos_y = 0.5f * acc_y * powf(delta_time, 2) + camera->vel_y * delta_time + camera->pos_y;
+
+    if (wall_map[(int)new_pos_x][(int)camera->pos_y] == 0)
     {
-        camera->pos_x += dx;
+        camera->pos_x = new_pos_x;
+        camera->vel_x = acc_x * delta_time + camera->vel_x;
     }
     else
     {
-        camera->mov_x = 0.0f;
+        camera->vel_x = 0.0f;
     }
 
-    if (wall_map[(int)(camera->pos_x)][(int)(camera->pos_y + dy)] == 0)
+    if (wall_map[(int)camera->pos_x][(int)new_pos_y] == 0)
     {
-        camera->pos_y += dy;
+        camera->pos_y = new_pos_y;
+        camera->vel_y = acc_y * delta_time + camera->vel_y;
     }
     else
     {
-        camera->mov_y = 0.0f;
+        camera->vel_y = 0.0f;
     }
 }
 
