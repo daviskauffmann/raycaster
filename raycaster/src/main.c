@@ -243,7 +243,7 @@ int main(int argc, char *args[])
     camera->vel_x = 0.0f;
     camera->vel_y = 0.0f;
 
-    printf("FOV: %d\n", (int)(2.0f * atanf(camera->plane_y) / M_PI * 180));
+    printf("FOV: %d\n", (int)(2 * atanf(camera->plane_y) / M_PI * 180));
 
     // render buffers
     unsigned int *pixel_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(unsigned int));
@@ -578,7 +578,8 @@ int main(int argc, char *args[])
                     for (int y = draw_start; y < draw_end; y++)
                     {
                         // y coordinate on the texture
-                        int texture_y = (((y * 256 - WINDOW_HEIGHT * 128 + line_height * 128) * texture->height) / line_height) / 256;
+                        float d = (float)y * 2 - WINDOW_HEIGHT + line_height;
+                        int texture_y = (int)(d * texture->height / line_height / 2);
 
                         // get the color on the texture
                         unsigned int color = texture->pixels[texture_x + texture_y * texture->width];
@@ -868,7 +869,7 @@ int main(int argc, char *args[])
                 for (int x = draw_start_x; x < draw_end_x; x++)
                 {
                     // x coordinate on the sprite
-                    int sprite_x = (256 * (x - (-billboard_width / 2 + billboard_screen_x)) * sprite->width / billboard_width) / 256;
+                    int sprite_x = (x - (-billboard_width / 2 + billboard_screen_x)) * sprite->width / billboard_width;
 
                     // the conditions in the if are:
                     // 1) it's in front of camera plane so you don't see things behind you
@@ -882,7 +883,8 @@ int main(int argc, char *args[])
                             if (transform_y < depth_buffer[x + y * WINDOW_WIDTH])
                             {
                                 // y coordinate on the sprite
-                                int sprite_y = ((((y - translate_y) * 256 - WINDOW_HEIGHT * 128 + billboard_height * 128) * sprite->height) / billboard_height) / 256;
+                                float d = ((float)y - translate_y) * 2 - WINDOW_HEIGHT + billboard_height;
+                                int sprite_y = (int)(d * sprite->height / billboard_height / 2);
 
                                 // get current color on the sprite
                                 unsigned int color = sprite->pixels[sprite_x + sprite_y * sprite->width];
@@ -1120,7 +1122,7 @@ unsigned int get_pixel(SDL_Surface *surface, int x, int y)
         return 0; // shouldn't happen, but avoids warnings
     }
     break;
-    }
+}
 }
 
 void set_pixel(SDL_Surface *surface, int x, int y, unsigned int pixel)
