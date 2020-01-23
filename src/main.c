@@ -183,6 +183,9 @@ struct billboard billboards[NUM_BILLBOARDS] =
 
 int main(int argc, char *argv[])
 {
+    (void)argc;
+    (void)argv;
+
     // init SDL
     SDL_Init(SDL_INIT_VIDEO);
     IMG_Init(IMG_INIT_PNG);

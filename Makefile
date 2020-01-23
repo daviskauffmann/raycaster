@@ -1,6 +1,6 @@
 CC := gcc
-CFLAGS := -ggdb -std=c99 -Wall -Wextra -Wpedantic -Wno-unused-parameter
-LDFLAGS :=
+CFLAGS := -ggdb -std=c99 -Wall -Wextra -Wpedantic -Wno-unused-parameter `pkg-config --cflags sdl2 sdl2_image sdl2_ttf`
+LDFLAGS := `pkg-config --libs sdl2 sdl2_image sdl2_ttf`
 
 SRC	:= src
 BUILD := build
@@ -11,11 +11,12 @@ OBJECTS := $(SOURCES:$(SRC)/%.c=$(BUILD)/%.o)
 DEPENDENCIES := $(OBJECTS:%.o=%.d)
 INCLUDE :=
 LIB :=
-LIBRARIES := -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -lSDL2_ttf
+LIBRARIES :=
 TARGET := $(BIN)/raycaster
 
 .PHONY: all
 all: $(TARGET)
+	@echo $(LDFLAGS)
 
 $(TARGET): $(OBJECTS)
 	mkdir -p $(@D)

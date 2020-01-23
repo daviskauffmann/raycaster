@@ -1,33 +1,28 @@
-# Undermountain
+# Raycaster
 
 ## Getting Started
 
-Make sure these are installed.
+### Download
 
-```txt
-SDL2
-SDL2_image
-SDL2_ttf
+```sh
+git clone https://github.com/daviskauffmann/raycaster.git
+cd raycaster
 ```
 
-Build the project.
+### Build
 
 ```sh
 make
 ```
 
-Build and run.
+### Build & Run
 
 ```sh
 make run
 ```
 
-Cleanup all build files and binaries.
+### Cleanup
 
 ```sh
 make clean
 ```
-
-## Configuration
-
-Copy `config.txt` and rename to `config.local.txt` to make local changes to the configuration. This file is not source controlled.
