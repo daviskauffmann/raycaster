@@ -2,6 +2,12 @@
 
 ## Getting Started
 
+### Dependencies
+
+- SDL2
+- SDL2_image
+- SDL2_ttf
+
 ### Download
 
 ```sh
