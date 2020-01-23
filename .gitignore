@@ -1,6 +1,4 @@
+.vscode
+
 bin
 build
-
-config.local.txt
-
-save.gz
