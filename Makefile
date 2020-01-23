@@ -16,7 +16,6 @@ TARGET := $(BIN)/raycaster
 
 .PHONY: all
 all: $(TARGET)
-	@echo $(LDFLAGS)
 
 $(TARGET): $(OBJECTS)
 	mkdir -p $(@D)
