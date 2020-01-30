@@ -1,36 +1,33 @@
 CC := gcc
-CFLAGS := -ggdb -std=c99 -Wall -Wextra -Wpedantic -Wno-unused-parameter `pkg-config --cflags sdl2 sdl2_image sdl2_ttf`
+CFLAGS := -ggdb -std=c99 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-type-limits `pkg-config --cflags sdl2 sdl2_image sdl2_ttf`
+CPPFLAGS :=
 LDFLAGS := `pkg-config --libs sdl2 sdl2_image sdl2_ttf` -mconsole
+LDLIBS :=
 
-SRC	:= src
-BUILD := build
-BIN	:= bin
-
-SOURCES	:= $(SRC)/main.c
-OBJECTS := $(SOURCES:$(SRC)/%.c=$(BUILD)/%.o)
-DEPENDENCIES := $(OBJECTS:%.o=%.d)
-INCLUDE :=
-LIB :=
-LIBRARIES :=
-TARGET := $(BIN)/raycaster
+SRC	:= src/main.c
+OBJ := $(SRC:src/%.c=build/%.o)
+DEP := $(OBJ:%.o=%.d)
+TGT := bin/raycaster
 
 .PHONY: all
-all: $(TARGET)
+all: $(TGT)
 
-$(TARGET): $(OBJECTS)
+$(TGT): $(OBJ)
 	mkdir -p $(@D)
-	$(CC) $^ -o $@ $(LDFLAGS) $(LIB) $(LIBRARIES)
+	$(CC) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
-$(BUILD)/%.o: $(SRC)/%.c
+build/%.o: src/%.c
 	mkdir -p $(@D)
-	$(CC) -c $< -o $@ -MMD -MF $(@:.o=.d) $(CFLAGS) $(INCLUDE)
+	$(CC) -c $< -o $@ -MMD -MF $(@:.o=.d) $(CFLAGS) $(CPPFLAGS)
 
--include $(DEPENDENCIES)
+-include $(DEP)
 
 .PHONY: run
 run: all
-	./$(TARGET)
+	./$(TGT)
 
 .PHONY: clean
 clean:
-	rm -rf $(BIN) $(BUILD)
+	rm -rf bin build
+
+
