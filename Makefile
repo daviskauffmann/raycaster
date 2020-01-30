@@ -5,14 +5,12 @@ LDFLAGS := `pkg-config --libs sdl2 sdl2_image sdl2_ttf` -mconsole
 LDLIBS :=
 
 SRC	:= src/main.c
-OBJ := $(SRC:src/%.c=build/%.o)
-DEP := $(OBJ:%.o=%.d)
-TGT := bin/raycaster
+TARGET := bin/raycaster
 
 .PHONY: all
-all: $(TGT)
+all: $(TARGET)
 
-$(TGT): $(OBJ)
+$(TARGET): $(SRC:src/%.c=build/%.o)
 	mkdir -p $(@D)
 	$(CC) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
@@ -20,11 +18,11 @@ build/%.o: src/%.c
 	mkdir -p $(@D)
 	$(CC) -c $< -o $@ -MMD -MF $(@:.o=.d) $(CFLAGS) $(CPPFLAGS)
 
--include $(DEP)
+-include $(SRC:src/%.c=build/%.d)
 
 .PHONY: run
 run: all
-	./$(TGT)
+	./$(TARGET)
 
 .PHONY: clean
 clean:
