@@ -10,15 +10,16 @@ TARGET := bin/raycaster
 .PHONY: all
 all: $(TARGET)
 
-$(TARGET): $(SRC:src/%.c=build/%.o)
-	mkdir -p $(@D)
+$(TARGET): $(SRC:src/%.c=obj/%.o)
+	@mkdir -p $(@D)
 	$(CC) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
-build/%.o: src/%.c
-	mkdir -p $(@D)
-	$(CC) -c $< -o $@ -MMD -MF $(@:.o=.d) $(CFLAGS) $(CPPFLAGS)
+obj/%.o: src/%.c
+	@mkdir -p $(@D)
+	@mkdir -p $(@D:obj%=dep%)
+	$(CC) -c $< -o $@ -MMD -MF $(@:obj/%.o=dep/%.d) $(CFLAGS) $(CPPFLAGS)
 
--include $(SRC:src/%.c=build/%.d)
+-include $(SRC:src/%.c=dep/%.d)
 
 .PHONY: run
 run: all
@@ -26,4 +27,4 @@ run: all
 
 .PHONY: clean
 clean:
-	rm -rf bin build
+	rm -rf bin obj dep
