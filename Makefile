@@ -1,11 +1,13 @@
-CC := gcc
-CFLAGS := -ggdb -std=c99 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-type-limits `pkg-config --cflags sdl2 sdl2_image sdl2_ttf`
-CPPFLAGS :=
-LDFLAGS := `pkg-config --libs sdl2 sdl2_image sdl2_ttf` -mconsole
-LDLIBS :=
+PKGS = sdl2 sdl2_image sdl2_ttf
 
-SRC	:= src/main.c
-TARGET := bin/raycaster
+CC = gcc
+CFLAGS = -ggdb -std=c99 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-type-limits `pkg-config --cflags $(PKGS)`
+CPPFLAGS =
+LDFLAGS = `pkg-config --libs $(PKGS)` -mconsole
+LDLIBS =
+
+SRC	= src/main.c
+TARGET = bin/raycaster
 
 .PHONY: all
 all: $(TARGET)
