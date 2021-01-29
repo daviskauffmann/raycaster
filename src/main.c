@@ -282,7 +282,7 @@ int main(int argc, char *argv[])
 
         // get mouse input
         int mouse_x, mouse_y;
-        /*unsigned int mouse = */SDL_GetMouseState(&mouse_x, &mouse_y);
+        /*unsigned int mouse = */ SDL_GetMouseState(&mouse_x, &mouse_y);
 
         // handle events
         SDL_Event event;
@@ -399,6 +399,14 @@ int main(int argc, char *argv[])
             acc_y += -camera->dir_x;
         }
 
+        // normalize acceleration vector
+        float acc_len = sqrt(acc_x * acc_x + acc_y * acc_y);
+        if (acc_len > 1.0f)
+        {
+            acc_x *= 1 / acc_len;
+            acc_y *= 1 / acc_len;
+        }
+
         acc_x *= SPEED;
         acc_y *= SPEED;
 
@@ -407,17 +415,6 @@ int main(int argc, char *argv[])
         {
             acc_x *= SPRINT_MULT;
             acc_y *= SPRINT_MULT;
-        }
-
-        // slow acceleration when moving diagonally
-        if ((keys[SDL_SCANCODE_W] && keys[SDL_SCANCODE_D]) ||
-            (keys[SDL_SCANCODE_W] && keys[SDL_SCANCODE_A]) ||
-            (keys[SDL_SCANCODE_S] && keys[SDL_SCANCODE_D]) ||
-            (keys[SDL_SCANCODE_S] && keys[SDL_SCANCODE_A]))
-        {
-            // precomputed 1 / sqrt(2)
-            acc_x *= 0.71f;
-            acc_y *= 0.71f;
         }
 
         // decelerate
