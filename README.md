@@ -11,12 +11,11 @@ cd raycaster
 
 ### Install Dependencies
 
-Install [CMake](https://cmake.org/).
-Install [vcpkg](https://vcpkg.io/).
+Install the following using the package manager of your choice:
 
-```sh
-vcpkg install sdl2 sdl2-image sdl2-ttf
-```
+- SDL2
+- SDL2-image
+- SDL2-ttf
 
 ### Build
 
