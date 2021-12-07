@@ -253,7 +253,6 @@ int main(int argc, char *argv[])
     float *depth_buffer = malloc(WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(float));
 
     // game settings
-    unsigned int current_time = 0;
     bool textured = true;
     bool draw_walls = true;
     bool draw_floor = true;
@@ -269,6 +268,7 @@ int main(int argc, char *argv[])
         unsigned int frame_start = SDL_GetTicks();
 
         // calculate time passed since last frame
+        static unsigned int current_time = 0;
         unsigned int previous_time = current_time;
         current_time = frame_start;
 
@@ -400,7 +400,7 @@ int main(int argc, char *argv[])
         }
 
         // normalize acceleration vector
-        float acc_len = sqrt(acc_x * acc_x + acc_y * acc_y);
+        float acc_len = sqrtf(acc_x * acc_x + acc_y * acc_y);
         if (acc_len > 1.0f)
         {
             acc_x *= 1 / acc_len;
