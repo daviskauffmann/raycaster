@@ -5,7 +5,7 @@
 ### Download
 
 ```sh
-git clone https://github.com/daviskauffmann/raycaster.git
+git clone --recurse-submodules https://github.com/daviskauffmann/raycaster.git
 cd raycaster
 ```
 

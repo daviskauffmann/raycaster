@@ -1,0 +1,10 @@
+{
+    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+    "name": "raycaster",
+    "version-semver": "0.0.0",
+    "dependencies": [
+        "sdl2",
+        "sdl2-image",
+        "sdl2-ttf"
+    ]
+  }
